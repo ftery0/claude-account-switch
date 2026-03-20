@@ -8,6 +8,7 @@ const COMMANDS = {
   list:            () => import('./commands/list.mjs').then(m => m.list()),
   use:             (name) => import('./commands/use.mjs').then(m => m.use(name)),
   'install-shell': () => import('./commands/install-shell.mjs').then(m => m.installShell()),
+  migrate:         (name) => import('./commands/migrate.mjs').then(m => m.migrate(name)),
 };
 
 function showHelp() {
@@ -23,12 +24,14 @@ function showHelp() {
     remove <name>     Remove a profile
     list              List all profiles
     use <name>        Switch active profile
+    migrate [name]    Migrate existing ~/.claude data into a profile
     install-shell     Install shell integration
 
   ${color.bold('Examples:')}
     npx claude-account-switch init
     npx claude-account-switch add staging
     npx claude-account-switch use work
+    npx claude-account-switch migrate work
 `);
 }
 

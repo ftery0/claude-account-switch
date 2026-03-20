@@ -111,7 +111,8 @@ export async function init() {
   for (const m of migrations) {
     migrateDir(m.source, m.target, shareSettings);
     migrated.add(m.target);
-    success(`Migrated ${m.source} to profile: ${m.target}`);
+    success(`Migrated ${m.source} → profile: ${m.target}`);
+    warn(`Original ${m.source} was NOT deleted. Once you verify everything works, you can remove it manually.`);
   }
 
   // Create remaining profiles
