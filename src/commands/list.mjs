@@ -6,7 +6,7 @@ export async function list() {
   const profiles = listProfiles();
 
   if (profiles.length === 0) {
-    info('No profiles configured. Run claude-switch init to set up.');
+    info('No profiles configured. Run claude-account-switch init to set up.');
     return;
   }
 

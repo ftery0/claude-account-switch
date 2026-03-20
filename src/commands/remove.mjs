@@ -5,7 +5,7 @@ import { getActiveProfile } from '../lib/config.mjs';
 
 export async function remove(name) {
   if (!name) {
-    error('Usage: claude-switch remove <name>');
+    error('Usage: claude-account-switch remove <name>');
     process.exit(1);
   }
 
@@ -34,7 +34,7 @@ export async function remove(name) {
     if (newActive) {
       success(`Active profile switched to: ${newActive}`);
     } else {
-      warn('No profiles remaining. Run claude-switch init to set up again.');
+      warn('No profiles remaining. Run claude-account-switch init to set up again.');
     }
   }
 }

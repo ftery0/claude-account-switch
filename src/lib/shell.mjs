@@ -62,9 +62,9 @@ __claude_switch_launch() {
   shift
   local config_file="$CLAUDE_PROFILES_DIR/$profile/.claude.json"
   if [ -f "$config_file" ]; then
-    echo "\\033[36m[claude-switch]\\033[0m Profile: \\033[1m$profile\\033[0m"
+    echo "\\033[36m[claude-account-switch]\\033[0m Profile: \\033[1m$profile\\033[0m"
   else
-    echo "\\033[36m[claude-switch]\\033[0m Profile: \\033[1m$profile\\033[0m \\033[33m(not logged in — login will start)\\033[0m"
+    echo "\\033[36m[claude-account-switch]\\033[0m Profile: \\033[1m$profile\\033[0m \\033[33m(not logged in — login will start)\\033[0m"
   fi
   CLAUDE_CONFIG_DIR="$CLAUDE_PROFILES_DIR/$profile" command claude "$@"
 }
@@ -75,7 +75,7 @@ claude() {
   count=$(__claude_switch_count)
 
   if [ "$count" -eq 0 ]; then
-    echo "No claude-switch profiles found. Run: npx claude-switch init" >&2
+    echo "No claude-account-switch profiles found. Run: npx claude-account-switch init" >&2
     return 1
   fi
 
@@ -93,7 +93,7 @@ claude() {
   profiles=$(__claude_switch_profiles)
 
   echo ""
-  echo "\\033[36m[claude-switch]\\033[0m Select a profile:"
+  echo "\\033[36m[claude-account-switch]\\033[0m Select a profile:"
   echo ""
   echo "$profiles" | while IFS= read -r p; do
     local marker=" "
@@ -154,7 +154,7 @@ claude-pick() {
   local profiles profile
   profiles=$(ls -d "$CLAUDE_PROFILES_DIR"/*/ 2>/dev/null | xargs -I{} basename {} | grep -v '^_')
   if [ -z "$profiles" ]; then
-    echo "No profiles found. Run: npx claude-switch init" >&2
+    echo "No profiles found. Run: npx claude-account-switch init" >&2
     return 1
   fi
   echo "Select a profile:"

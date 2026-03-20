@@ -1,15 +1,15 @@
-# claude-switch
+# claude-account-switch
 
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code)를 위한 멀티 계정 프로필 관리 도구.
 
 [English](./README.md)
 
-Claude Code는 공식적으로 멀티 계정을 지원하지 않습니다. `claude-switch`는 `CLAUDE_CONFIG_DIR` 환경변수를 활용해 프로필별로 독립된 OAuth 인증 정보를 관리합니다.
+Claude Code는 공식적으로 멀티 계정을 지원하지 않습니다. `claude-account-switch`는 `CLAUDE_CONFIG_DIR` 환경변수를 활용해 프로필별로 독립된 OAuth 인증 정보를 관리합니다.
 
 ## 빠른 시작
 
 ```bash
-npx claude-switch init
+npx claude-account-switch init
 ```
 
 인터랙티브 위자드가 안내합니다:
@@ -21,22 +21,22 @@ npx claude-switch init
 
 ```bash
 # npx로 바로 사용 (권장)
-npx claude-switch init
+npx claude-account-switch init
 
 # 또는 글로벌 설치
-npm i -g claude-switch
+npm i -g claude-account-switch
 ```
 
 ## 명령어
 
 | 명령어 | 설명 |
 |--------|------|
-| `claude-switch init` | 인터랙티브 설정 위자드 |
-| `claude-switch add <name>` | 새 프로필 생성 |
-| `claude-switch remove <name>` | 프로필 삭제 |
-| `claude-switch list` | 프로필 목록 |
-| `claude-switch use <name>` | 활성 프로필 전환 |
-| `claude-switch install-shell` | 셸 통합 설치 |
+| `claude-account-switch init` | 인터랙티브 설정 위자드 |
+| `claude-account-switch add <name>` | 새 프로필 생성 |
+| `claude-account-switch remove <name>` | 프로필 삭제 |
+| `claude-account-switch list` | 프로필 목록 |
+| `claude-account-switch use <name>` | 활성 프로필 전환 |
+| `claude-account-switch install-shell` | 셸 통합 설치 |
 
 ## 셸 통합
 

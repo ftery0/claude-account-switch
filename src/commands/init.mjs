@@ -26,7 +26,7 @@ export async function init() {
   if (existsSync(PROFILES_DIR)) {
     const meta = readMeta();
     if (meta.profiles.length > 0) {
-      warn('claude-switch is already initialized.');
+      warn('claude-account-switch is already initialized.');
       console.log(`  Profiles: ${meta.profiles.join(', ')}`);
       console.log(`  Active: ${meta.activeProfile}`);
       console.log();

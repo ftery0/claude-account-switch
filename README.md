@@ -1,15 +1,15 @@
-# claude-switch
+# claude-account-switch
 
 Multi-account profile manager for [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
 
 [한국어](./README.ko.md)
 
-Claude Code doesn't officially support multiple accounts. `claude-switch` uses the `CLAUDE_CONFIG_DIR` environment variable to manage separate profiles, each with its own OAuth credentials.
+Claude Code doesn't officially support multiple accounts. `claude-account-switch` uses the `CLAUDE_CONFIG_DIR` environment variable to manage separate profiles, each with its own OAuth credentials.
 
 ## Quick Start
 
 ```bash
-npx claude-switch init
+npx claude-account-switch init
 ```
 
 The interactive wizard will guide you through:
@@ -21,22 +21,22 @@ The interactive wizard will guide you through:
 
 ```bash
 # Use directly with npx (recommended)
-npx claude-switch init
+npx claude-account-switch init
 
 # Or install globally
-npm i -g claude-switch
+npm i -g claude-account-switch
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `claude-switch init` | Interactive setup wizard |
-| `claude-switch add <name>` | Create a new profile |
-| `claude-switch remove <name>` | Remove a profile |
-| `claude-switch list` | List all profiles |
-| `claude-switch use <name>` | Switch active profile |
-| `claude-switch install-shell` | Install shell integration |
+| `claude-account-switch init` | Interactive setup wizard |
+| `claude-account-switch add <name>` | Create a new profile |
+| `claude-account-switch remove <name>` | Remove a profile |
+| `claude-account-switch list` | List all profiles |
+| `claude-account-switch use <name>` | Switch active profile |
+| `claude-account-switch install-shell` | Install shell integration |
 
 ## Shell Integration
 
@@ -83,7 +83,7 @@ After running `init` or `install-shell`, these commands are available in your te
 
 ## Zero Dependencies
 
-`claude-switch` has no external dependencies — it uses only Node.js built-in modules for instant `npx` startup.
+`claude-account-switch` has no external dependencies — it uses only Node.js built-in modules for instant `npx` startup.
 
 ## License
 

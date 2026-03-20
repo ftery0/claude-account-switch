@@ -12,10 +12,10 @@ const COMMANDS = {
 
 function showHelp() {
   console.log(`
-  ${color.bold('claude-switch')} — Multi-account manager for Claude Code
+  ${color.bold('claude-account-switch')} — Multi-account manager for Claude Code
 
   ${color.bold('Usage:')}
-    claude-switch <command> [options]
+    claude-account-switch <command> [options]
 
   ${color.bold('Commands:')}
     init              Interactive setup wizard
@@ -26,9 +26,9 @@ function showHelp() {
     install-shell     Install shell integration
 
   ${color.bold('Examples:')}
-    npx claude-switch init
-    npx claude-switch add staging
-    npx claude-switch use work
+    npx claude-account-switch init
+    npx claude-account-switch add staging
+    npx claude-account-switch use work
 `);
 }
 

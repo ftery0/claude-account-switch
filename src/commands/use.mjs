@@ -4,7 +4,7 @@ import { setActiveProfile, getActiveProfile } from '../lib/config.mjs';
 
 export async function use(name) {
   if (!name) {
-    error('Usage: claude-switch use <name>');
+    error('Usage: claude-account-switch use <name>');
     process.exit(1);
   }
 

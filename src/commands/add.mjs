@@ -4,7 +4,7 @@ import { readMeta } from '../lib/config.mjs';
 
 export async function add(name) {
   if (!name) {
-    error('Usage: claude-switch add <name>');
+    error('Usage: claude-account-switch add <name>');
     process.exit(1);
   }
 
@@ -22,5 +22,5 @@ export async function add(name) {
   const meta = readMeta();
   createProfile(name, meta.shareSettings !== false);
   success(`Created profile: ${name}`);
-  console.log(`  Run ${color.cyan(`claude-switch use ${name}`)} to activate it`);
+  console.log(`  Run ${color.cyan(`claude-account-switch use ${name}`)} to activate it`);
 }
