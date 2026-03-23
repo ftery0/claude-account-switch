@@ -29,8 +29,7 @@ export async function remove(name) {
   success(`Removed profile: ${name}`);
 
   if (name === active) {
-    const { getActiveProfile: getNew } = await import('../lib/config.mjs');
-    const newActive = getNew();
+    const newActive = getActiveProfile();
     if (newActive) {
       success(`Active profile switched to: ${newActive}`);
     } else {
