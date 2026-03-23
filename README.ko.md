@@ -12,10 +12,9 @@ Claude Code는 공식적으로 멀티 계정을 지원하지 않습니다. `clau
 npx claude-account-switch init
 ```
 
-인터랙티브 위자드가 안내합니다:
-1. 프로필 생성 (예: `work`, `personal`)
-2. 기존 `~/.claude` 설정 마이그레이션
-3. 셸 통합 설치
+인터랙티브 위자드가 프로필 생성, 기존 설정 마이그레이션, 셸 통합 설치를 안내합니다.
+
+**플랫폼별 가이드:** [macOS](docs/setup-macos.ko.md) · [Linux](docs/setup-linux.ko.md) · [Windows](docs/setup-windows.ko.md)
 
 ## 설치
 

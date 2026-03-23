@@ -12,10 +12,9 @@ Claude Code doesn't officially support multiple accounts. `claude-account-switch
 npx claude-account-switch init
 ```
 
-The interactive wizard will guide you through:
-1. Creating profiles (e.g., `work`, `personal`)
-2. Migrating existing `~/.claude` configs
-3. Installing shell integration
+The interactive wizard will guide you through creating profiles, migrating existing configs, and installing shell integration.
+
+**Platform guides:** [macOS](docs/setup-macos.md) · [Linux](docs/setup-linux.md) · [Windows](docs/setup-windows.md)
 
 ## Installation
 
