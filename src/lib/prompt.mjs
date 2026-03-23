@@ -1,5 +1,9 @@
 import { createInterface } from 'node:readline';
-import { color } from './ui.mjs';
+import { color, hasColor } from './ui.mjs';
+
+// ANSI helpers — only emit escape sequences when the terminal supports them
+const CURSOR_UP = (n) => hasColor ? `\x1b[${n}A` : '';
+const CLEAR_LINE = hasColor ? '\x1b[2K' : '';
 
 /**
  * Zero-dependency interactive prompts using raw stdin.
@@ -47,25 +51,25 @@ export async function select(message, choices) {
     const render = () => {
       // Move cursor up to overwrite previous render (except first time)
       if (rendered) {
-        process.stdout.write(`\x1b[${choices.length}A`);
+        process.stdout.write(CURSOR_UP(choices.length));
       }
       choices.forEach((c, i) => {
         const label = typeof c === 'string' ? c : c.label;
         const prefix = i === selected ? color.cyan('  \u276f ') : '    ';
-        process.stdout.write(`\x1b[2K${prefix}${label}\n`);
+        process.stdout.write(`${CLEAR_LINE}${prefix}${label}\n`);
       });
       rendered = true;
     };
 
-    let rendered = false;
-    process.stdout.write(`${color.cyan('?')} ${message}\n`);
-    render();
-
     if (!process.stdin.isTTY) {
-      // Non-interactive: pick first choice
+      // Non-interactive: pick first choice without rendering menu
       resolve(typeof choices[0] === 'string' ? choices[0] : choices[0].value);
       return;
     }
+
+    let rendered = false;
+    process.stdout.write(`${color.cyan('?')} ${message}\n`);
+    render();
 
     process.stdin.setRawMode(true);
     process.stdin.resume();
@@ -87,6 +91,8 @@ export async function select(message, choices) {
         resolve(value);
       } else if (key === '\x03') { // ctrl-c
         process.stdin.setRawMode(false);
+        process.stdin.pause();
+        process.stdin.removeListener('data', onData);
         process.stdout.write('\n');
         process.exit(0);
       }

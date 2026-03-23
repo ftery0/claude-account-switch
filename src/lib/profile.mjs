@@ -2,19 +2,62 @@ import {
   existsSync, mkdirSync, rmSync, symlinkSync,
   copyFileSync, cpSync, writeFileSync, readFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 import {
-  PROFILES_DIR, SHARED_DIR, PROFILE_NAME_REGEX, RESERVED_NAMES,
-  SHARED_FILES, SHARED_DIRS, PROFILE_FILES, PROFILE_DIRS,
+  IS_WINDOWS, PROFILES_DIR, SHARED_DIR, PROFILE_NAME_REGEX, PROFILE_NAME_MAX_LENGTH,
+  RESERVED_NAMES, SHARED_FILES, SHARED_DIRS, PROFILE_FILES, PROFILE_DIRS,
 } from './constants.mjs';
 import { addProfileToMeta, removeProfileFromMeta, readMeta } from './config.mjs';
+import { warn } from './ui.mjs';
+
+/**
+ * Creates a symbolic link from `link` pointing to `relTarget` (relative path).
+ *
+ * Windows behaviour:
+ *   - Directories: junction point (no admin/developer mode required)
+ *   - Files: tries a real symlink; if EPERM (no developer mode), copies the
+ *     file instead and warns the user that changes won't auto-sync.
+ *
+ * Unix behaviour: plain symlink with the relative target path.
+ */
+function createLink(relTarget, link, isDir) {
+  if (existsSync(link)) return;
+  if (IS_WINDOWS) {
+    const absTarget = resolve(dirname(link), relTarget);
+    if (isDir) {
+      // Junction points work on Windows without elevated privileges
+      symlinkSync(absTarget, link, 'junction');
+    } else {
+      try {
+        symlinkSync(absTarget, link);
+      } catch (err) {
+        if (err.code === 'EPERM' || err.code === 'ENOTSUP') {
+          // Developer Mode is off — fall back to a plain copy
+          copyFileSync(absTarget, link);
+          warn(`Symlink unavailable: copied shared file instead (${link}).`);
+          warn(`Enable Windows Developer Mode for full shared-settings sync.`);
+        } else {
+          throw err;
+        }
+      }
+    }
+  } else {
+    symlinkSync(relTarget, link);
+  }
+}
 
 export function validateProfileName(name) {
+  if (!name) {
+    return 'Profile name cannot be empty';
+  }
+  if (name.length > PROFILE_NAME_MAX_LENGTH) {
+    return `Profile name must be ${PROFILE_NAME_MAX_LENGTH} characters or fewer`;
+  }
   if (RESERVED_NAMES.includes(name)) {
     return `"${name}" is a reserved name`;
   }
   if (!PROFILE_NAME_REGEX.test(name)) {
-    return 'Only lowercase letters, numbers, and hyphens allowed (must start with letter or number)';
+    return 'Only lowercase letters, numbers, and hyphens allowed (must start/end with letter or number)';
   }
   return null;
 }
@@ -47,18 +90,10 @@ export function createProfile(name, shareSettings = true) {
   if (shareSettings) {
     ensureShared();
     for (const f of SHARED_FILES) {
-      const target = join('..', '_shared', f);
-      const link = join(dir, f);
-      if (!existsSync(link)) {
-        symlinkSync(target, link);
-      }
+      createLink(join('..', '_shared', f), join(dir, f), false);
     }
     for (const d of SHARED_DIRS) {
-      const target = join('..', '_shared', d);
-      const link = join(dir, d);
-      if (!existsSync(link)) {
-        symlinkSync(target, link);
-      }
+      createLink(join('..', '_shared', d), join(dir, d), true);
     }
   }
 
@@ -120,10 +155,7 @@ export function migrateDir(sourceDir, profileName, shareSettings = true) {
           writeFileSync(sharedDest, content);
         }
       }
-      const link = join(dir, f);
-      if (!existsSync(link)) {
-        symlinkSync(join('..', '_shared', f), link);
-      }
+      createLink(join('..', '_shared', f), join(dir, f), false);
     }
     for (const d of SHARED_DIRS) {
       const src = join(sourceDir, d);
@@ -131,10 +163,7 @@ export function migrateDir(sourceDir, profileName, shareSettings = true) {
       if (existsSync(src)) {
         cpSync(src, sharedDest, { recursive: true });
       }
-      const link = join(dir, d);
-      if (!existsSync(link)) {
-        symlinkSync(join('..', '_shared', d), link);
-      }
+      createLink(join('..', '_shared', d), join(dir, d), true);
     }
   } else {
     for (const f of SHARED_FILES) {

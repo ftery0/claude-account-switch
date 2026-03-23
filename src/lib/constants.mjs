@@ -2,14 +2,15 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 export const HOME = homedir();
+export const IS_WINDOWS = process.platform === 'win32';
 export const PROFILES_DIR = join(HOME, '.claude-profiles');
 export const SHARED_DIR = join(PROFILES_DIR, '_shared');
 export const META_FILE = join(PROFILES_DIR, 'meta.json');
-export const SHELL_INTEGRATION_FILE = join(PROFILES_DIR, '.shell-integration.sh');
 
 export const DEFAULT_CLAUDE_DIR = join(HOME, '.claude');
 
-export const PROFILE_NAME_REGEX = /^[a-z0-9][a-z0-9-]*$/;
+export const PROFILE_NAME_REGEX = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+export const PROFILE_NAME_MAX_LENGTH = 30;
 export const RESERVED_NAMES = ['_shared', 'default'];
 
 // Files/dirs that are shared across profiles (symlinked)
