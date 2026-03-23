@@ -4,14 +4,15 @@ import { color, box, success, warn } from '../lib/ui.mjs';
 import * as prompt from '../lib/prompt.mjs';
 import { readMeta, writeMeta } from '../lib/config.mjs';
 import { createProfile, validateProfileName, migrateDir, profileExists } from '../lib/profile.mjs';
-import { PROFILES_DIR, DEFAULT_CLAUDE_DIR, HOME } from '../lib/constants.mjs';
+import { PROFILES_DIR, DEFAULT_CLAUDE_DIR, HOME, IS_WINDOWS } from '../lib/constants.mjs';
 import { installShellIntegration } from '../lib/shell.mjs';
 
 // Known existing profile directories to detect for migration
+const homeLabel = IS_WINDOWS ? '%USERPROFILE%' : '~';
 const KNOWN_DIRS = [
-  { path: join(HOME, '.claude'), label: '~/.claude' },
-  { path: join(HOME, '.claude-work'), label: '~/.claude-work' },
-  { path: join(HOME, '.claude-personal'), label: '~/.claude-personal' },
+  { path: join(HOME, '.claude'), label: `${homeLabel}/.claude` },
+  { path: join(HOME, '.claude-work'), label: `${homeLabel}/.claude-work` },
+  { path: join(HOME, '.claude-personal'), label: `${homeLabel}/.claude-personal` },
 ];
 
 export async function init() {
@@ -44,12 +45,12 @@ export async function init() {
   const names = [];
   if (count === 1) {
     // Single profile mode — auto-name as the user chooses or use simple name
-    const name = await askProfileName('Profile name:', 'main');
+    const name = await askProfileName('Profile name:', 'main', names);
     names.push(name);
   } else {
     for (let i = 0; i < count; i++) {
       const defaultName = i === 0 ? 'work' : i === 1 ? 'personal' : '';
-      const name = await askProfileName(`Profile ${i + 1} name:`, defaultName);
+      const name = await askProfileName(`Profile ${i + 1} name:`, defaultName, names);
       names.push(name);
     }
   }
@@ -72,13 +73,24 @@ export async function init() {
   console.log();
 
   // Step 5: Shell integration
+  const shellChoices = IS_WINDOWS
+    ? [
+        { label: "Yes - PowerShell  (recommended for Windows)", value: 'powershell' },
+        { label: "Yes - bash (~/.bashrc)   [Git Bash / WSL]", value: 'bash' },
+        { label: "Yes - zsh (~/.zshrc)    [WSL]", value: 'zsh' },
+        { label: "Yes - fish (~/.config/fish/config.fish)", value: 'fish' },
+        { label: "No, I'll do it later", value: 'no' },
+      ]
+    : [
+        { label: "Yes - zsh (~/.zshrc)", value: 'zsh' },
+        { label: "Yes - bash (~/.bashrc)", value: 'bash' },
+        { label: "Yes - fish (~/.config/fish/config.fish)", value: 'fish' },
+        { label: "No, I'll do it later", value: 'no' },
+      ];
+
   const shellChoice = await prompt.select(
-    'Install shell integration? (enables \'claude\' command switching)',
-    [
-      { label: 'Yes - zsh (~/.zshrc)', value: 'zsh' },
-      { label: 'Yes - bash (~/.bashrc)', value: 'bash' },
-      { label: 'No, I\'ll do it later', value: 'no' },
-    ],
+    "Install shell integration? (enables 'claude' command switching)",
+    shellChoices,
   );
   console.log();
 
@@ -145,23 +157,35 @@ export async function init() {
   console.log();
   console.log(`  ${color.bold('Next steps:')}`);
   if (shellChoice !== 'no') {
-    const rcFile = shellChoice === 'zsh' ? '~/.zshrc' : '~/.bashrc';
-    console.log(`    1. Open a new terminal (or run: ${color.cyan(`source ${rcFile}`)})`);
+    const activateCmd = {
+      powershell: '. $PROFILE',
+      fish:       'source ~/.config/fish/config.fish',
+      zsh:        'source ~/.zshrc',
+      bash:       'source ~/.bashrc',
+    }[shellChoice];
+    console.log(`    1. Open a new terminal (or run: ${color.cyan(activateCmd)})`);
   }
   console.log(`    2. Run ${color.cyan('claude')} to authenticate your "${activeProfile}" profile`);
   if (names.length > 1) {
     const otherProfile = names.find(n => n !== activeProfile);
-    console.log(`    3. Run ${color.cyan(`cpf ${otherProfile} && claude`)} to authenticate "${otherProfile}"`);
+    const chainCmd = shellChoice === 'powershell'
+      ? `cpf ${otherProfile}; claude`
+      : `cpf ${otherProfile} && claude`;
+    console.log(`    3. Run ${color.cyan(chainCmd)} to authenticate "${otherProfile}"`);
   }
   console.log();
 }
 
-async function askProfileName(message, defaultVal) {
+async function askProfileName(message, defaultVal, existingNames = []) {
   while (true) {
     const name = await prompt.text(message, defaultVal);
     const err = validateProfileName(name);
     if (err) {
       console.log(`  ${color.red(err)}`);
+      continue;
+    }
+    if (existingNames.includes(name)) {
+      console.log(`  ${color.red(`"${name}" is already used — choose a different name`)}`);
       continue;
     }
     return name;

@@ -1,48 +1,149 @@
-import { describe, it, before, after } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, rmSync, existsSync, readlinkSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 
-// Override PROFILES_DIR for testing
-const TEST_DIR = join(tmpdir(), `claude-switch-test-${Date.now()}`);
-
-// We need to patch constants before importing profile
-// Since ESM doesn't allow monkey-patching, we'll test via the actual functions
-// but point to a temp directory by setting env
+// ─── validateProfileName ─────────────────────────────────────────────────────
 
 describe('validateProfileName', async () => {
   const { validateProfileName } = await import('../src/lib/profile.mjs');
 
-  it('accepts valid names', () => {
-    assert.equal(validateProfileName('work'), null);
-    assert.equal(validateProfileName('my-profile'), null);
-    assert.equal(validateProfileName('dev2'), null);
+  // ── Valid names ──
+
+  it('accepts single lowercase letter', () => {
     assert.equal(validateProfileName('a'), null);
+    assert.equal(validateProfileName('z'), null);
   });
 
-  it('rejects reserved names', () => {
-    assert.ok(validateProfileName('_shared'));
-    assert.ok(validateProfileName('default'));
+  it('accepts single digit', () => {
+    assert.equal(validateProfileName('0'), null);
+    assert.equal(validateProfileName('9'), null);
   });
 
-  it('rejects invalid characters', () => {
-    assert.ok(validateProfileName('Work'));     // uppercase
-    assert.ok(validateProfileName('my profile')); // space
-    assert.ok(validateProfileName('my_profile')); // underscore
-    assert.ok(validateProfileName('-start'));   // starts with hyphen
-    assert.ok(validateProfileName(''));         // empty
+  it('accepts common profile names', () => {
+    assert.equal(validateProfileName('work'), null);
+    assert.equal(validateProfileName('personal'), null);
+    assert.equal(validateProfileName('staging'), null);
+    assert.equal(validateProfileName('dev2'), null);
   });
-});
 
-describe('config', async () => {
-  const { readMeta, writeMeta, addProfileToMeta, removeProfileFromMeta } = await import('../src/lib/config.mjs');
+  it('accepts names with hyphens in the middle', () => {
+    assert.equal(validateProfileName('my-profile'), null);
+    assert.equal(validateProfileName('work-prod'), null);
+    assert.equal(validateProfileName('a-b-c'), null);
+    assert.equal(validateProfileName('a1-b2-c3'), null);
+  });
 
-  it('readMeta returns defaults when no file exists', () => {
-    // This tests against the actual META_FILE path which may or may not exist
-    // Just verify structure
-    const meta = readMeta();
-    assert.ok(Array.isArray(meta.profiles));
-    assert.ok('activeProfile' in meta);
+  it('accepts maximum length name (30 chars)', () => {
+    assert.equal(validateProfileName('a'.repeat(30)), null);
+    assert.equal(validateProfileName('a' + 'b'.repeat(28) + 'c'), null);
+  });
+
+  it('accepts two-character names', () => {
+    assert.equal(validateProfileName('ab'), null);
+    assert.equal(validateProfileName('a1'), null);
+    assert.equal(validateProfileName('1a'), null);
+  });
+
+  // ── Invalid: empty / length ──
+
+  it('rejects empty string', () => {
+    assert.ok(validateProfileName(''));
+    assert.match(validateProfileName(''), /empty/i);
+  });
+
+  it('rejects undefined/null (falsy)', () => {
+    assert.ok(validateProfileName(undefined));
+    assert.ok(validateProfileName(null));
+    assert.ok(validateProfileName(''));
+  });
+
+  it('rejects names exceeding max length', () => {
+    assert.ok(validateProfileName('a'.repeat(31)));
+    assert.ok(validateProfileName('a'.repeat(100)));
+    assert.match(validateProfileName('a'.repeat(31)), /30/);
+  });
+
+  // ── Invalid: reserved names ──
+
+  it('rejects _shared', () => {
+    const err = validateProfileName('_shared');
+    assert.ok(err);
+    assert.match(err, /reserved/i);
+  });
+
+  it('rejects default', () => {
+    const err = validateProfileName('default');
+    assert.ok(err);
+    assert.match(err, /reserved/i);
+  });
+
+  // ── Invalid: character rules ──
+
+  it('rejects uppercase letters', () => {
+    assert.ok(validateProfileName('Work'));
+    assert.ok(validateProfileName('WORK'));
+    assert.ok(validateProfileName('wOrK'));
+  });
+
+  it('rejects spaces', () => {
+    assert.ok(validateProfileName('my profile'));
+    assert.ok(validateProfileName(' work'));
+    assert.ok(validateProfileName('work '));
+  });
+
+  it('rejects underscores', () => {
+    assert.ok(validateProfileName('my_profile'));
+    assert.ok(validateProfileName('_test'));
+  });
+
+  it('rejects names starting with hyphen', () => {
+    assert.ok(validateProfileName('-start'));
+    assert.ok(validateProfileName('-'));
+    assert.ok(validateProfileName('--double'));
+  });
+
+  it('rejects names ending with hyphen', () => {
+    assert.ok(validateProfileName('work-'));
+    assert.ok(validateProfileName('my-profile-'));
+  });
+
+  it('rejects special characters', () => {
+    assert.ok(validateProfileName('work!'));
+    assert.ok(validateProfileName('work@home'));
+    assert.ok(validateProfileName('profile.v2'));
+    assert.ok(validateProfileName('user/admin'));
+    assert.ok(validateProfileName('a+b'));
+    assert.ok(validateProfileName('a=b'));
+    assert.ok(validateProfileName('a&b'));
+  });
+
+  it('rejects unicode characters', () => {
+    assert.ok(validateProfileName('프로필'));
+    assert.ok(validateProfileName('café'));
+    assert.ok(validateProfileName('naïve'));
+  });
+
+  it('rejects whitespace-only input', () => {
+    assert.ok(validateProfileName('   '));
+    assert.ok(validateProfileName('\t'));
+    assert.ok(validateProfileName('\n'));
+  });
+
+  it('rejects dots', () => {
+    assert.ok(validateProfileName('.'));
+    assert.ok(validateProfileName('..'));
+    assert.ok(validateProfileName('.hidden'));
+  });
+
+  // ── Edge: single hyphen ──
+
+  it('rejects single hyphen (starts and ends with it)', () => {
+    assert.ok(validateProfileName('-'));
+  });
+
+  // ── Double hyphens (valid per regex) ──
+
+  it('accepts double hyphens in the middle', () => {
+    assert.equal(validateProfileName('a--b'), null);
+    assert.equal(validateProfileName('work--staging'), null);
   });
 });

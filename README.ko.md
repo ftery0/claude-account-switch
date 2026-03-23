@@ -12,10 +12,9 @@ Claude Code는 공식적으로 멀티 계정을 지원하지 않습니다. `clau
 npx claude-account-switch init
 ```
 
-인터랙티브 위자드가 안내합니다:
-1. 프로필 생성 (예: `work`, `personal`)
-2. 기존 `~/.claude` 설정 마이그레이션
-3. 셸 통합 설치
+인터랙티브 위자드가 프로필 생성, 기존 설정 마이그레이션, 셸 통합 설치를 안내합니다.
+
+**플랫폼별 가이드:** [macOS](docs/setup-macos.ko.md) · [Linux](docs/setup-linux.ko.md) · [Windows](docs/setup-windows.ko.md)
 
 ## 설치
 
@@ -36,6 +35,7 @@ npm i -g claude-account-switch
 | `claude-account-switch remove <name>` | 프로필 삭제 |
 | `claude-account-switch list` | 프로필 목록 |
 | `claude-account-switch use <name>` | 활성 프로필 전환 |
+| `claude-account-switch migrate [name]` | 기존 `~/.claude` 데이터를 프로필로 마이그레이션 |
 | `claude-account-switch install-shell` | 셸 통합 설치 |
 
 ## 셸 통합
@@ -47,6 +47,15 @@ npm i -g claude-account-switch
 | `claude` | 활성 프로필로 Claude 실행 |
 | `cpf <name>` | 빠른 프로필 전환 |
 | `claude-pick` | 인터랙티브 프로필 선택기 |
+
+**지원 셸:**
+
+| 셸 | 플랫폼 | 설정 파일 |
+|----|--------|-----------|
+| zsh | macOS / Linux | `~/.zshrc` |
+| bash | macOS / Linux / Git Bash | `~/.bashrc` |
+| fish | macOS / Linux | `~/.config/fish/config.fish` |
+| PowerShell | Windows | `$PROFILE` |
 
 ## 작동 방식
 
@@ -66,20 +75,24 @@ npm i -g claude-account-switch
     └── commands/          → ../_shared/commands/
 ```
 
-- **공유 파일** (`settings.json`, `commands/`)은 `_shared/`에 원본 저장, 각 프로필에 심링크
+- **공유 파일** (`settings.json`, `commands/`)은 `_shared/`에 원본 저장, 각 프로필에 링크
+  - macOS/Linux: 심볼릭 링크
+  - Windows: junction (디렉토리), 심링크 또는 복사 (파일 — 심링크는 개발자 모드 필요)
 - **프로필별 파일** (`.claude.json`, `plugins/`, `projects/`)은 독립 보관
 - **임시 파일** (`cache/`, `sessions/` 등)은 Claude Code가 자동 생성, 관리하지 않음
 
 ## 프로필 이름 규칙
 
 - 영문 소문자, 숫자, 하이픈만 허용
-- 문자 또는 숫자로 시작해야 함
+- 문자 또는 숫자로 시작하고 끝나야 함
+- 최대 30자
 - 예약어 불가: `_shared`, `default`
 
 ## 요구사항
 
 - Node.js 18+
 - Claude Code CLI 설치 필요
+- **지원 플랫폼:** macOS, Linux, Windows (네이티브 + WSL)
 
 ## Zero Dependencies
 

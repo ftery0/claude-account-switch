@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { color, success, warn, error } from '../lib/ui.mjs';
 import * as prompt from '../lib/prompt.mjs';
 import { readMeta } from '../lib/config.mjs';
-import { migrateDir, profileExists, validateProfileName } from '../lib/profile.mjs';
-import { HOME, DEFAULT_CLAUDE_DIR } from '../lib/constants.mjs';
+import { migrateDir, profileExists, profileDir, validateProfileName } from '../lib/profile.mjs';
+import { HOME, DEFAULT_CLAUDE_DIR, IS_WINDOWS } from '../lib/constants.mjs';
 
 export async function migrate(profileName) {
   const meta = readMeta();
@@ -15,16 +15,17 @@ export async function migrate(profileName) {
   }
 
   // Pick source directory
+  const h = IS_WINDOWS ? '%USERPROFILE%' : '~';
   const commonSources = [
-    { label: `~/.claude  (default Claude Code directory)`, value: DEFAULT_CLAUDE_DIR },
-    { label: '~/.claude-work', value: join(HOME, '.claude-work') },
-    { label: '~/.claude-personal', value: join(HOME, '.claude-personal') },
+    { label: `${h}/.claude  (default Claude Code directory)`, value: DEFAULT_CLAUDE_DIR },
+    { label: `${h}/.claude-work`, value: join(HOME, '.claude-work') },
+    { label: `${h}/.claude-personal`, value: join(HOME, '.claude-personal') },
     { label: 'Enter a custom path', value: '__custom__' },
   ].filter(s => s.value === '__custom__' || existsSync(s.value));
 
   if (commonSources.length === 1) {
     // Only custom option left — no known dirs found
-    error('No existing Claude directories found (checked ~/.claude, ~/.claude-work, ~/.claude-personal).');
+    error(`No existing Claude directories found (checked ${h}/.claude, ${h}/.claude-work, ${h}/.claude-personal).`);
     console.log(`  Specify a path manually with: ${color.cyan('claude-account-switch migrate <profile> --from <path>')}`);
     process.exit(1);
   }
@@ -70,6 +71,13 @@ export async function migrate(profileName) {
   console.log(`  Source : ${color.cyan(sourceDir)}`);
   console.log(`  Profile: ${color.cyan(targetProfile)}`);
   console.log();
+
+  // Warn if target profile already has auth data — migration would overwrite it
+  const targetAuthFile = join(profileDir(targetProfile), '.claude.json');
+  if (existsSync(targetAuthFile)) {
+    warn(`Profile "${targetProfile}" already has credentials (.claude.json).`);
+    warn('Migrating will overwrite existing profile data.');
+  }
 
   const confirmed = await prompt.confirm(
     `This will copy data from ${sourceDir} into the "${targetProfile}" profile. Continue?`,
