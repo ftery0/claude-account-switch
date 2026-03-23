@@ -36,6 +36,7 @@ npm i -g claude-account-switch
 | `claude-account-switch remove <name>` | Remove a profile |
 | `claude-account-switch list` | List all profiles |
 | `claude-account-switch use <name>` | Switch active profile |
+| `claude-account-switch migrate [name]` | Migrate existing `~/.claude` data into a profile |
 | `claude-account-switch install-shell` | Install shell integration |
 
 ## Shell Integration
@@ -47,6 +48,15 @@ After running `init` or `install-shell`, these commands are available in your te
 | `claude` | Run Claude with the active profile |
 | `cpf <name>` | Quick switch to a profile |
 | `claude-pick` | Interactive profile selector |
+
+**Supported shells:**
+
+| Shell | Platform | Config file |
+|-------|----------|-------------|
+| zsh | macOS / Linux | `~/.zshrc` |
+| bash | macOS / Linux / Git Bash | `~/.bashrc` |
+| fish | macOS / Linux | `~/.config/fish/config.fish` |
+| PowerShell | Windows | `$PROFILE` |
 
 ## How It Works
 
@@ -66,20 +76,24 @@ After running `init` or `install-shell`, these commands are available in your te
     └── commands/          → ../_shared/commands/
 ```
 
-- **Shared files** (`settings.json`, `commands/`) are stored in `_shared/` and symlinked into each profile
+- **Shared files** (`settings.json`, `commands/`) are stored in `_shared/` and linked into each profile
+  - macOS/Linux: symlink
+  - Windows: junction (dirs), symlink or copy (files — enable Developer Mode for symlink support)
 - **Profile-specific files** (`.claude.json`, `plugins/`, `projects/`) are kept independently
 - **Temporary files** (`cache/`, `sessions/`, etc.) are auto-created by Claude Code and not managed
 
 ## Profile Name Rules
 
 - Lowercase letters, numbers, and hyphens only
-- Must start with a letter or number
+- Must start and end with a letter or number
+- Max 30 characters
 - Reserved names: `_shared`, `default`
 
 ## Requirements
 
 - Node.js 18+
 - Claude Code CLI installed
+- **Supported platforms:** macOS, Linux, Windows (native + WSL)
 
 ## Zero Dependencies
 
