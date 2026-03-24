@@ -1,5 +1,6 @@
 import { parseArgs } from 'node:util';
-import { error, color } from './lib/ui.mjs';
+import { error, color, success } from './lib/ui.mjs';
+import { installAllShells } from './lib/shell.mjs';
 
 const COMMANDS = {
   init:            () => import('./commands/init.mjs').then(m => m.init()),
@@ -71,5 +72,13 @@ export async function run(argv) {
   } catch (err) {
     error(err.message);
     process.exit(1);
+  }
+
+  // Auto-detect new shells and install integration silently
+  const { newlyInstalled } = installAllShells();
+  if (newlyInstalled.length > 0) {
+    console.log();
+    success(`New shell detected — integration installed (${newlyInstalled.join(', ')})`);
+    success('Open a new terminal to activate');
   }
 }
