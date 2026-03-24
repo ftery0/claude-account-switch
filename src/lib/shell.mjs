@@ -1,13 +1,15 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { HOME, PROFILES_DIR, IS_WINDOWS } from './constants.mjs';
 
 // Unix file permissions are silently ignored on Windows
 const EXEC_MODE = IS_WINDOWS ? undefined : { mode: 0o755 };
 
-const SH_FILE   = join(PROFILES_DIR, '.shell-integration.sh');
-const PS1_FILE  = join(PROFILES_DIR, '.shell-integration.ps1');
-const FISH_FILE = join(PROFILES_DIR, '.shell-integration.fish');
+const SH_FILE     = join(PROFILES_DIR, '.shell-integration.sh');
+const PS1_FILE    = join(PROFILES_DIR, '.shell-integration.ps1');
+const FISH_FILE   = join(PROFILES_DIR, '.shell-integration.fish');
+const PICKER_FILE = join(PROFILES_DIR, '.picker.mjs');
 
 export function installShellIntegration(shell) {
   if (shell === 'powershell') {
@@ -67,6 +69,15 @@ export function installAllShells() {
   return { newlyInstalled, alreadyInstalled };
 }
 
+// ─── Picker script ───────────────────────────────────────────────────────────
+
+function generatePickerScript() {
+  if (!existsSync(PROFILES_DIR)) return;
+  const src = join(dirname(fileURLToPath(import.meta.url)), 'picker-script.mjs');
+  const content = readFileSync(src, 'utf8');
+  writeFileSync(PICKER_FILE, content, EXEC_MODE);
+}
+
 // ─── Unix (bash / zsh) ───────────────────────────────────────────────────────
 
 function installUnixRc(shell) {
@@ -78,6 +89,7 @@ function installUnixRc(shell) {
 }
 
 function generateUnixScript() {
+  generatePickerScript();
   // Notes on portability:
   //   - Uses `#!/bin/sh` shebang but is always *sourced* into bash or zsh,
   //     so `local` and process-substitution are safe.
@@ -147,45 +159,45 @@ claude() {
     return
   fi
 
-  # Multiple profiles — interactive picker
-  local current profiles_list i choice selected marker login_status
+  # Multiple profiles — arrow-key picker (via node) or number fallback
+  local current selected
   current=$(__claude_switch_active)
-  profiles_list=$(__claude_switch_profiles)
-  i=1
 
-  printf "\\n"
-  printf "\\033[36m[claude-account-switch]\\033[0m Select a profile:\\n"
-  printf "\\n"
-
-  # Use here-doc to avoid subshell so the i counter stays in scope
-  while IFS= read -r p; do
-    marker=" "
-    login_status=""
-    [ "$p" = "$current" ] && marker="\\033[32m>\\033[0m"
-    [ ! -f "$CLAUDE_PROFILES_DIR/$p/.claude.json" ] && login_status=" \\033[33m(not logged in)\\033[0m"
-    printf "  %b \\033[1m%d)\\033[0m %s%b\\n" "$marker" "$i" "$p" "$login_status"
-    i=$((i + 1))
-  done <<_PROFILES_LIST_
+  if [ -f "$CLAUDE_PROFILES_DIR/.picker.mjs" ] && command -v node >/dev/null 2>&1; then
+    selected=$(node "$CLAUDE_PROFILES_DIR/.picker.mjs" </dev/tty)
+    [ -z "$selected" ] && return 1
+  else
+    local profiles_list i choice marker login_status
+    profiles_list=$(__claude_switch_profiles)
+    i=1
+    printf "\\n"
+    printf "\\033[36m[claude-account-switch]\\033[0m Select a profile:\\n"
+    printf "\\n"
+    while IFS= read -r p; do
+      marker=" "
+      login_status=""
+      [ "$p" = "$current" ] && marker="\\033[32m>\\033[0m"
+      [ ! -f "$CLAUDE_PROFILES_DIR/$p/.claude.json" ] && login_status=" \\033[33m(not logged in)\\033[0m"
+      printf "  %b \\033[1m%d)\\033[0m %s%b\\n" "$marker" "$i" "$p" "$login_status"
+      i=$((i + 1))
+    done <<_PROFILES_LIST_
 $profiles_list
 _PROFILES_LIST_
-
-  printf "\\n"
-  printf "  Enter number (default: %s): " "$current"
-  read -r choice
-
-  if [ -z "$choice" ]; then
-    selected="$current"
-  else
-    selected=$(printf '%s\\n' "$profiles_list" | sed -n "\${choice}p")
-  fi
-
-  if [ -z "$selected" ]; then
-    printf "Invalid selection\\n" >&2
-    return 1
+    printf "\\n"
+    printf "  Enter number (default: %s): " "$current"
+    read -r choice
+    if [ -z "$choice" ]; then
+      selected="$current"
+    else
+      selected=$(printf '%s\\n' "$profiles_list" | sed -n "\${choice}p")
+    fi
+    if [ -z "$selected" ]; then
+      printf "Invalid selection\\n" >&2
+      return 1
+    fi
   fi
 
   [ "$selected" != "$current" ] && cpf "$selected" >/dev/null
-
   printf "\\n"
   __claude_switch_launch "$selected" "$@"
 }
@@ -209,30 +221,37 @@ cpf() {
 
 # claude-pick — standalone interactive profile selector
 claude-pick() {
-  local profiles_list current i choice profile marker
-  profiles_list=$(__claude_switch_profiles)
-  if [ -z "$profiles_list" ]; then
-    printf "No profiles found. Run: npx claude-account-switch init\\n" >&2
-    return 1
-  fi
-  current=$(__claude_switch_active)
-  printf "Select a profile:\\n"
-  i=1
-  while IFS= read -r p; do
-    marker=""
-    [ "$p" = "$current" ] && marker=" *"
-    printf "  %d) %s%s\\n" "$i" "$p" "$marker"
-    i=$((i + 1))
-  done <<_PROFILES_LIST_
+  if [ -f "$CLAUDE_PROFILES_DIR/.picker.mjs" ] && command -v node >/dev/null 2>&1; then
+    local selected
+    selected=$(node "$CLAUDE_PROFILES_DIR/.picker.mjs" </dev/tty)
+    [ -z "$selected" ] && return 1
+    cpf "$selected"
+  else
+    local profiles_list current i choice profile marker
+    profiles_list=$(__claude_switch_profiles)
+    if [ -z "$profiles_list" ]; then
+      printf "No profiles found. Run: npx claude-account-switch init\\n" >&2
+      return 1
+    fi
+    current=$(__claude_switch_active)
+    printf "Select a profile:\\n"
+    i=1
+    while IFS= read -r p; do
+      marker=""
+      [ "$p" = "$current" ] && marker=" *"
+      printf "  %d) %s%s\\n" "$i" "$p" "$marker"
+      i=$((i + 1))
+    done <<_PROFILES_LIST_
 $profiles_list
 _PROFILES_LIST_
-  printf "Enter number: "
-  read -r choice
-  profile=$(printf '%s\\n' "$profiles_list" | sed -n "\${choice}p")
-  if [ -n "$profile" ]; then
-    cpf "$profile"
-  else
-    printf "Invalid selection\\n" >&2
+    printf "Enter number: "
+    read -r choice
+    profile=$(printf '%s\\n' "$profiles_list" | sed -n "\${choice}p")
+    if [ -n "$profile" ]; then
+      cpf "$profile"
+    else
+      printf "Invalid selection\\n" >&2
+    fi
   fi
 }
 `;
@@ -251,6 +270,7 @@ function installFishConfig() {
 }
 
 function generateFishScript() {
+  generatePickerScript();
   // Fish uses node (already available as a dependency of claude-account-switch)
   // for JSON read/write in cpf to avoid sed escaping complexity in fish syntax.
   const script = `# Claude Switch fish integration
@@ -304,38 +324,42 @@ function claude
   end
 
   set -l current (__claude_switch_active)
-  echo ""
-  echo (set_color cyan)"[claude-account-switch]"(set_color normal)" Select a profile:"
-  echo ""
-
-  for i in (seq 1 $count)
-    set -l p $profiles[$i]
-    set -l marker " "
-    set -l login_status ""
-    if test "$p" = "$current"
-      set marker (set_color green)">"(set_color normal)
-    end
-    if not test -f "$__CLAUDE_PROFILES_DIR/$p/.claude.json"
-      set login_status " "(set_color yellow)"(not logged in)"(set_color normal)
-    end
-    echo "  $marker $i) $p$login_status"
-  end
-
-  echo ""
-  read -P "  Enter number (default: $current): " choice
-
   set -l selected ""
-  if test -z "$choice"
-    set selected $current
-  else if string match -qr '^[0-9]+$' "$choice"
-    and test $choice -ge 1
-    and test $choice -le $count
-    set selected $profiles[$choice]
-  end
 
-  if test -z "$selected"
-    echo "Invalid selection" >&2
-    return 1
+  if test -f "$__CLAUDE_PROFILES_DIR/.picker.mjs"; and command -v node >/dev/null 2>&1
+    set selected (node "$__CLAUDE_PROFILES_DIR/.picker.mjs" </dev/tty)
+    if test -z "$selected"
+      return 1
+    end
+  else
+    echo ""
+    echo (set_color cyan)"[claude-account-switch]"(set_color normal)" Select a profile:"
+    echo ""
+    for i in (seq 1 $count)
+      set -l p $profiles[$i]
+      set -l marker " "
+      set -l login_status ""
+      if test "$p" = "$current"
+        set marker (set_color green)">"(set_color normal)
+      end
+      if not test -f "$__CLAUDE_PROFILES_DIR/$p/.claude.json"
+        set login_status " "(set_color yellow)"(not logged in)"(set_color normal)
+      end
+      echo "  $marker $i) $p$login_status"
+    end
+    echo ""
+    read -P "  Enter number (default: $current): " choice
+    if test -z "$choice"
+      set selected $current
+    else if string match -qr '^[0-9]+$' "$choice"
+      and test $choice -ge 1
+      and test $choice -le $count
+      set selected $profiles[$choice]
+    end
+    if test -z "$selected"
+      echo "Invalid selection" >&2
+      return 1
+    end
   end
 
   if test "$selected" != "$current"
@@ -360,28 +384,36 @@ function cpf
 end
 
 function claude-pick
-  set -l profiles (__claude_switch_profiles)
-  if test -z "$profiles"
-    echo "No profiles found. Run: npx claude-account-switch init" >&2
-    return 1
-  end
-  set -l current (__claude_switch_active)
-  echo "Select a profile:"
-  for i in (seq 1 (count $profiles))
-    set -l p $profiles[$i]
-    set -l marker ""
-    if test "$p" = "$current"
-      set marker " *"
+  if test -f "$__CLAUDE_PROFILES_DIR/.picker.mjs"; and command -v node >/dev/null 2>&1
+    set -l selected (node "$__CLAUDE_PROFILES_DIR/.picker.mjs" </dev/tty)
+    if test -z "$selected"
+      return 1
     end
-    echo "  $i) $p$marker"
-  end
-  read -P "Enter number: " choice
-  if string match -qr '^[0-9]+$' "$choice"
-    and test $choice -ge 1
-    and test $choice -le (count $profiles)
-    cpf $profiles[$choice]
+    cpf $selected
   else
-    echo "Invalid selection" >&2
+    set -l profiles (__claude_switch_profiles)
+    if test -z "$profiles"
+      echo "No profiles found. Run: npx claude-account-switch init" >&2
+      return 1
+    end
+    set -l current (__claude_switch_active)
+    echo "Select a profile:"
+    for i in (seq 1 (count $profiles))
+      set -l p $profiles[$i]
+      set -l marker ""
+      if test "$p" = "$current"
+        set marker " *"
+      end
+      echo "  $i) $p$marker"
+    end
+    read -P "Enter number: " choice
+    if string match -qr '^[0-9]+$' "$choice"
+      and test $choice -ge 1
+      and test $choice -le (count $profiles)
+      cpf $profiles[$choice]
+    else
+      echo "Invalid selection" >&2
+    end
   end
 end
 `;
