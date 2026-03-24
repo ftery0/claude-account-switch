@@ -1,5 +1,9 @@
 # claude-account-switch
 
+[![npm version](https://img.shields.io/npm/v/claude-account-switch)](https://www.npmjs.com/package/claude-account-switch)
+[![npm downloads](https://img.shields.io/npm/dm/claude-account-switch)](https://www.npmjs.com/package/claude-account-switch)
+[![license](https://img.shields.io/npm/l/claude-account-switch)](./LICENSE)
+
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code)를 위한 멀티 계정 프로필 관리 도구.
 
 [English](./README.md)
