@@ -3,7 +3,7 @@ import { join, dirname } from 'node:path';
 import { HOME, PROFILES_DIR, IS_WINDOWS } from './constants.mjs';
 
 // Unix file permissions are silently ignored on Windows
-const EXEC_MODE = IS_WINDOWS ? undefined : EXEC_MODE;
+const EXEC_MODE = IS_WINDOWS ? undefined : { mode: 0o755 };
 
 const SH_FILE   = join(PROFILES_DIR, '.shell-integration.sh');
 const PS1_FILE  = join(PROFILES_DIR, '.shell-integration.ps1');
@@ -23,6 +23,50 @@ export function installShellIntegration(shell) {
   }
 }
 
+/**
+ * Auto-detect and install shell integration for ALL available shells.
+ * Returns { newlyInstalled: string[], alreadyInstalled: string[] }.
+ */
+export function installAllShells() {
+  if (!existsSync(PROFILES_DIR)) return { newlyInstalled: [], alreadyInstalled: [] };
+
+  const newlyInstalled = [];
+  const alreadyInstalled = [];
+
+  function track(name, isNew) {
+    (isNew ? newlyInstalled : alreadyInstalled).push(name);
+  }
+
+  // Generate all scripts upfront (idempotent — keeps them up-to-date)
+  generateUnixScript();
+  generatePowerShellScript();
+  generateFishScript();
+
+  // PowerShell (always on Windows)
+  if (IS_WINDOWS) {
+    track('PowerShell', installPowerShellProfile());
+  }
+
+  const currentShell = (process.env.SHELL || '').split('/').pop();
+
+  // bash: install if .bashrc exists or it's the current shell
+  if (existsSync(join(HOME, '.bashrc')) || currentShell === 'bash') {
+    track('bash', installUnixRc('bash'));
+  }
+
+  // zsh: install if .zshrc exists, current shell, or macOS default
+  if (existsSync(join(HOME, '.zshrc')) || currentShell === 'zsh' || process.platform === 'darwin') {
+    track('zsh', installUnixRc('zsh'));
+  }
+
+  // fish: install if fish config dir exists or it's the current shell
+  if (existsSync(join(HOME, '.config', 'fish')) || currentShell === 'fish') {
+    track('fish', installFishConfig());
+  }
+
+  return { newlyInstalled, alreadyInstalled };
+}
+
 // ─── Unix (bash / zsh) ───────────────────────────────────────────────────────
 
 function installUnixRc(shell) {
@@ -30,7 +74,7 @@ function installUnixRc(shell) {
     ? join(HOME, '.zshrc')
     : join(HOME, '.bashrc');
   const sourceLine = '[ -f ~/.claude-profiles/.shell-integration.sh ] && . ~/.claude-profiles/.shell-integration.sh';
-  addSourceLine(rcFile, sourceLine, '.shell-integration.sh');
+  return addSourceLine(rcFile, sourceLine, '.shell-integration.sh');
 }
 
 function generateUnixScript() {
@@ -203,7 +247,7 @@ function installFishConfig() {
   const configFile = join(configDir, 'config.fish');
   const sourceLine = 'test -f ~/.claude-profiles/.shell-integration.fish && source ~/.claude-profiles/.shell-integration.fish';
   mkdirSync(configDir, { recursive: true });
-  addSourceLine(configFile, sourceLine, '.shell-integration.fish');
+  return addSourceLine(configFile, sourceLine, '.shell-integration.fish');
 }
 
 function generateFishScript() {
@@ -355,7 +399,7 @@ function installPowerShellProfile() {
   const profileFile = existsSync(ps5Profile) ? ps5Profile : ps7Profile;
   const sourceLine = `. "$env:USERPROFILE\\.claude-profiles\\.shell-integration.ps1"`;
   mkdirSync(dirname(profileFile), { recursive: true });
-  addSourceLine(profileFile, sourceLine, '.shell-integration.ps1');
+  return addSourceLine(profileFile, sourceLine, '.shell-integration.ps1');
 }
 
 function generatePowerShellScript() {
@@ -516,17 +560,19 @@ function claude-pick {
 
 // ─── Shared helper ───────────────────────────────────────────────────────────
 
+/** @returns {boolean} true if newly installed, false if already present */
 function addSourceLine(rcFile, sourceLine, marker) {
   if (existsSync(rcFile)) {
     const content = readFileSync(rcFile, 'utf8');
     if (content.includes(marker)) {
-      // Already installed — just regenerate the integration script (done by caller)
-      return;
+      return false; // already installed
     }
     const cleaned = content.split('\n').filter(l => !l.includes(marker));
     cleaned.push('', '# Claude Switch - multi-account manager', sourceLine);
     writeFileSync(rcFile, cleaned.join('\n'));
+    return true;
   } else {
     writeFileSync(rcFile, `\n# Claude Switch - multi-account manager\n${sourceLine}\n`);
+    return true;
   }
 }

@@ -5,7 +5,7 @@ import * as prompt from '../lib/prompt.mjs';
 import { readMeta, writeMeta } from '../lib/config.mjs';
 import { createProfile, validateProfileName, migrateDir, profileExists } from '../lib/profile.mjs';
 import { PROFILES_DIR, DEFAULT_CLAUDE_DIR, HOME, IS_WINDOWS } from '../lib/constants.mjs';
-import { installShellIntegration } from '../lib/shell.mjs';
+import { installAllShells } from '../lib/shell.mjs';
 
 // Known existing profile directories to detect for migration
 const homeLabel = IS_WINDOWS ? '%USERPROFILE%' : '~';
@@ -72,29 +72,7 @@ export async function init() {
   const shareSettings = await prompt.confirm('Share settings across profiles? (recommended)', true);
   console.log();
 
-  // Step 5: Shell integration
-  const shellChoices = IS_WINDOWS
-    ? [
-        { label: "Yes - PowerShell  (recommended for Windows)", value: 'powershell' },
-        { label: "Yes - bash (~/.bashrc)   [Git Bash / WSL]", value: 'bash' },
-        { label: "Yes - zsh (~/.zshrc)    [WSL]", value: 'zsh' },
-        { label: "Yes - fish (~/.config/fish/config.fish)", value: 'fish' },
-        { label: "No, I'll do it later", value: 'no' },
-      ]
-    : [
-        { label: "Yes - zsh (~/.zshrc)", value: 'zsh' },
-        { label: "Yes - bash (~/.bashrc)", value: 'bash' },
-        { label: "Yes - fish (~/.config/fish/config.fish)", value: 'fish' },
-        { label: "No, I'll do it later", value: 'no' },
-      ];
-
-  const shellChoice = await prompt.select(
-    "Install shell integration? (enables 'claude' command switching)",
-    shellChoices,
-  );
-  console.log();
-
-  // Step 6: Detect existing directories for migration
+  // Step 5: Detect existing directories for migration
   const existingDirs = KNOWN_DIRS.filter(d => existsSync(d.path) && existsSync(join(d.path, '.claude.json')));
   const migrations = [];
 
@@ -145,10 +123,11 @@ export async function init() {
     success('Shared settings linked');
   }
 
-  // Shell integration
-  if (shellChoice !== 'no') {
-    installShellIntegration(shellChoice);
-    success('Shell integration installed');
+  // Shell integration — auto-install for all detected shells
+  const { newlyInstalled, alreadyInstalled } = installAllShells();
+  const allShells = [...newlyInstalled, ...alreadyInstalled];
+  if (allShells.length > 0) {
+    success(`Shell integration installed (${allShells.join(', ')})`);
   }
 
   success(`Active profile: ${activeProfile}`);
@@ -156,19 +135,11 @@ export async function init() {
   // Next steps
   console.log();
   console.log(`  ${color.bold('Next steps:')}`);
-  if (shellChoice !== 'no') {
-    const activateCmd = {
-      powershell: '. $PROFILE',
-      fish:       'source ~/.config/fish/config.fish',
-      zsh:        'source ~/.zshrc',
-      bash:       'source ~/.bashrc',
-    }[shellChoice];
-    console.log(`    1. Open a new terminal (or run: ${color.cyan(activateCmd)})`);
-  }
+  console.log(`    1. Open a new terminal`);
   console.log(`    2. Run ${color.cyan('claude')} to authenticate your "${activeProfile}" profile`);
   if (names.length > 1) {
     const otherProfile = names.find(n => n !== activeProfile);
-    const chainCmd = shellChoice === 'powershell'
+    const chainCmd = IS_WINDOWS
       ? `cpf ${otherProfile}; claude`
       : `cpf ${otherProfile} && claude`;
     console.log(`    3. Run ${color.cyan(chainCmd)} to authenticate "${otherProfile}"`);
