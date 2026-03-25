@@ -1,0 +1,7 @@
+<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#1a1a2e"/>
+  <text x="600" y="260" text-anchor="middle" font-family="monospace" font-size="56" fill="#e2e8f0" font-weight="bold">claude-account-switch</text>
+  <text x="600" y="340" text-anchor="middle" font-family="sans-serif" font-size="32" fill="#94a3b8">Multi-account Profile Manager</text>
+  <text x="600" y="390" text-anchor="middle" font-family="sans-serif" font-size="32" fill="#94a3b8">for Claude Code</text>
+  <text x="600" y="480" text-anchor="middle" font-family="monospace" font-size="24" fill="#64748b">npx claude-account-switch init</text>
+</svg>

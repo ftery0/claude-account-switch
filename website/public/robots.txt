@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ftery0.github.io/claude-account-switch/sitemap.xml
