@@ -16,7 +16,43 @@ Claude Code는 공식적으로 멀티 계정을 지원하지 않습니다. `clau
 npx claude-account-switch init
 ```
 
-인터랙티브 위자드가 프로필 생성, 기존 설정 마이그레이션, 셸 통합 설치를 안내합니다.
+인터랙티브 위자드가 프로필 생성, 기존 설정 마이그레이션, 감지된 모든 셸에 셸 통합 자동 설치를 안내합니다.
+
+```
+  ╭──────────────────────────────────────╮
+  │ Welcome to Claude Switch!            │
+  │ Multi-account manager for Claude Code│
+  ╰──────────────────────────────────────╯
+
+  How many profiles do you want to set up? 2
+
+  Profile 1 name: work
+  Profile 2 name: personal
+
+  Which profile should be active by default?
+  ❯ work
+    personal
+
+  Share settings across profiles? (recommended) Yes
+
+  Existing ~/.claude detected. Migrate to a profile?
+  ❯ Yes, migrate to "work"
+    Yes, migrate to "personal"
+    No, skip
+
+  ✓ Migrated ~/.claude → profile: work
+  ⚠ Original ~/.claude was NOT deleted.
+  ✓ Created profile: work
+  ✓ Created profile: personal
+  ✓ Shared settings linked
+  ✓ Shell integration installed (zsh, bash)
+  ✓ Active profile: work
+
+  Next steps:
+    1. Open a new terminal
+    2. Run claude to authenticate your "work" profile
+    3. Run cpf personal && claude to authenticate "personal"
+```
 
 **플랫폼별 가이드:** [macOS](docs/setup-macos.ko.md) · [Linux](docs/setup-linux.ko.md) · [Windows](docs/setup-windows.ko.md)
 
@@ -44,7 +80,7 @@ npm i -g claude-account-switch
 
 ## 셸 통합
 
-`init` 또는 `install-shell` 실행 후 터미널에서 사용 가능:
+`init` 실행 시 감지된 모든 셸에 자동 설치됩니다. 터미널에서 사용 가능:
 
 | 명령어 | 설명 |
 |--------|------|
@@ -65,25 +101,37 @@ npm i -g claude-account-switch
 
 ```
 ~/.claude-profiles/
-├── meta.json              ← 프로필 메타 정보 + 활성 프로필
+├── meta.json                  ← 프로필 메타 정보 + 활성 프로필
+├── .shell-integration.sh      ← bash/zsh 통합 스크립트
+├── .shell-integration.fish    ← fish 통합 스크립트
+├── .shell-integration.ps1     ← PowerShell 통합 스크립트
+├── .picker.mjs                ← 화살표 키 선택기 스크립트
 ├── _shared/
-│   ├── settings.json      ← 공통 설정 (원본)
-│   └── commands/           ← 공통 커스텀 명령어
+│   ├── settings.json          ← 공통 설정 (원본)
+│   └── commands/               ← 공통 커스텀 명령어
 ├── work/
-│   ├── .claude.json       ← 회사 계정 OAuth
-│   ├── settings.json      → ../_shared/settings.json (심링크)
-│   └── commands/          → ../_shared/commands/ (심링크)
+│   ├── .claude.json           ← 회사 계정 OAuth
+│   ├── settings.local.json    ← 로컬 설정 (프로필별)
+│   ├── settings.json          → ../_shared/settings.json (심링크)
+│   ├── commands/              → ../_shared/commands/ (심링크)
+│   ├── plugins/               ← 설치된 플러그인
+│   ├── projects/              ← 프로젝트별 설정
+│   └── plans/                 ← 저장된 플랜
 └── personal/
-    ├── .claude.json       ← 개인 계정 OAuth
-    ├── settings.json      → ../_shared/settings.json
-    └── commands/          → ../_shared/commands/
+    ├── .claude.json           ← 개인 계정 OAuth
+    ├── settings.local.json
+    ├── settings.json          → ../_shared/settings.json
+    ├── commands/              → ../_shared/commands/
+    ├── plugins/
+    ├── projects/
+    └── plans/
 ```
 
 - **공유 파일** (`settings.json`, `commands/`)은 `_shared/`에 원본 저장, 각 프로필에 링크
   - macOS/Linux: 심볼릭 링크
-  - Windows: junction (디렉토리), 심링크 또는 복사 (파일 — 심링크는 개발자 모드 필요)
-- **프로필별 파일** (`.claude.json`, `plugins/`, `projects/`)은 독립 보관
-- **임시 파일** (`cache/`, `sessions/` 등)은 Claude Code가 자동 생성, 관리하지 않음
+  - Windows: 먼저 심링크 생성을 시도하고, 실패 시(개발자 모드 미활성) 복사. 디렉토리는 항상 junction 사용.
+- **프로필별 파일** (`.claude.json`, `settings.local.json`, `plugins/`, `projects/`, `plans/`)은 독립 보관
+- **임시 파일** (`cache/`, `sessions/`, `history.jsonl` 등)은 Claude Code가 자동 생성, 관리하지 않음
 
 ## 프로필 이름 규칙
 

@@ -16,7 +16,43 @@ Claude Code doesn't officially support multiple accounts. `claude-account-switch
 npx claude-account-switch init
 ```
 
-The interactive wizard will guide you through creating profiles, migrating existing configs, and installing shell integration.
+The interactive wizard will guide you through creating profiles, migrating existing configs, and auto-installing shell integration for all detected shells.
+
+```
+  ╭──────────────────────────────────────╮
+  │ Welcome to Claude Switch!            │
+  │ Multi-account manager for Claude Code│
+  ╰──────────────────────────────────────╯
+
+  How many profiles do you want to set up? 2
+
+  Profile 1 name: work
+  Profile 2 name: personal
+
+  Which profile should be active by default?
+  ❯ work
+    personal
+
+  Share settings across profiles? (recommended) Yes
+
+  Existing ~/.claude detected. Migrate to a profile?
+  ❯ Yes, migrate to "work"
+    Yes, migrate to "personal"
+    No, skip
+
+  ✓ Migrated ~/.claude → profile: work
+  ⚠ Original ~/.claude was NOT deleted.
+  ✓ Created profile: work
+  ✓ Created profile: personal
+  ✓ Shared settings linked
+  ✓ Shell integration installed (zsh, bash)
+  ✓ Active profile: work
+
+  Next steps:
+    1. Open a new terminal
+    2. Run claude to authenticate your "work" profile
+    3. Run cpf personal && claude to authenticate "personal"
+```
 
 **Platform guides:** [macOS](docs/setup-macos.md) · [Linux](docs/setup-linux.md) · [Windows](docs/setup-windows.md)
 
@@ -44,7 +80,7 @@ npm i -g claude-account-switch
 
 ## Shell Integration
 
-After running `init` or `install-shell`, these commands are available in your terminal:
+Shell integration is auto-installed for all detected shells during `init`. These commands are available in your terminal:
 
 | Command | Description |
 |---------|-------------|
@@ -65,25 +101,37 @@ After running `init` or `install-shell`, these commands are available in your te
 
 ```
 ~/.claude-profiles/
-├── meta.json              ← Profile metadata + active profile
+├── meta.json                  ← Profile metadata + active profile
+├── .shell-integration.sh      ← bash/zsh integration script
+├── .shell-integration.fish    ← fish integration script
+├── .shell-integration.ps1     ← PowerShell integration script
+├── .picker.mjs                ← Arrow-key picker script
 ├── _shared/
-│   ├── settings.json      ← Shared settings (original)
-│   └── commands/           ← Shared custom commands
+│   ├── settings.json          ← Shared settings (original)
+│   └── commands/               ← Shared custom commands
 ├── work/
-│   ├── .claude.json       ← Work account OAuth
-│   ├── settings.json      → ../_shared/settings.json (symlink)
-│   └── commands/          → ../_shared/commands/ (symlink)
+│   ├── .claude.json           ← Work account OAuth
+│   ├── settings.local.json    ← Local settings (profile-specific)
+│   ├── settings.json          → ../_shared/settings.json (symlink)
+│   ├── commands/              → ../_shared/commands/ (symlink)
+│   ├── plugins/               ← Installed plugins
+│   ├── projects/              ← Project-specific settings
+│   └── plans/                 ← Saved plans
 └── personal/
-    ├── .claude.json       ← Personal account OAuth
-    ├── settings.json      → ../_shared/settings.json
-    └── commands/          → ../_shared/commands/
+    ├── .claude.json           ← Personal account OAuth
+    ├── settings.local.json
+    ├── settings.json          → ../_shared/settings.json
+    ├── commands/              → ../_shared/commands/
+    ├── plugins/
+    ├── projects/
+    └── plans/
 ```
 
 - **Shared files** (`settings.json`, `commands/`) are stored in `_shared/` and linked into each profile
   - macOS/Linux: symlink
-  - Windows: junction (dirs), symlink or copy (files — enable Developer Mode for symlink support)
-- **Profile-specific files** (`.claude.json`, `plugins/`, `projects/`) are kept independently
-- **Temporary files** (`cache/`, `sessions/`, etc.) are auto-created by Claude Code and not managed
+  - Windows: symlinks are attempted first; falls back to copy if Developer Mode is not enabled. Directories always use junctions.
+- **Profile-specific files** (`.claude.json`, `settings.local.json`, `plugins/`, `projects/`, `plans/`) are kept independently
+- **Temporary files** (`cache/`, `sessions/`, `history.jsonl`, etc.) are auto-created by Claude Code and not managed
 
 ## Profile Name Rules
 
