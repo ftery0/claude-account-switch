@@ -26,13 +26,15 @@
 npx claude-account-switch init
 ```
 
-### 2. 셸 선택
+### 2. 셸 통합 (자동)
 
-셸을 선택합니다:
+초기 설정 마법사가 시스템에서 사용 가능한 모든 셸을 자동 감지하고 통합을 설치합니다. Linux에서는 일반적으로:
 
 - **bash (~/.bashrc)** — 대부분의 배포판 기본
-- **zsh (~/.zshrc)** — 인기 있는 대안
-- **fish (~/.config/fish/config.fish)** — fish 사용자
+- **zsh (~/.zshrc)** — `.zshrc`가 있는 경우
+- **fish (~/.config/fish/config.fish)** — fish가 설치된 경우
+
+수동 셸 선택이 필요 없습니다.
 
 ### 3. 활성화
 

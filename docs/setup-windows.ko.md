@@ -17,15 +17,15 @@
 npx claude-account-switch init
 ```
 
-### 2. PowerShell 통합 선택
+### 2. 셸 통합 (자동)
 
-프롬프트에서 **PowerShell (recommended for Windows)** 를 선택합니다.
+초기 설정 마법사가 사용 가능한 셸을 자동 감지하고 통합을 설치합니다. Windows에서는 일반적으로:
 
-PowerShell 프로필(`$PROFILE`)에 다음 한 줄이 추가됩니다:
+- **PowerShell (`$PROFILE`)** — Windows에서 자동 설치
+- **bash (~/.bashrc)** — Git Bash 또는 WSL이 감지된 경우
+- **zsh (~/.zshrc)** — zsh가 설치된 WSL이 감지된 경우
 
-```powershell
-. "$env:USERPROFILE\.claude-profiles\.shell-integration.ps1"
-```
+수동 셸 선택이 필요 없습니다.
 
 ### 3. 활성화
 
@@ -46,22 +46,23 @@ claude-pick      # 인터랙티브 프로필 선택
 
 ## 선택사항: 개발자 모드 활성화
 
-기본적으로 Windows에서는 공유 설정(`settings.json`)이 각 프로필에 **복사**됩니다. 실제 심볼릭 링크를 사용하려면 (변경사항이 프로필 간 자동 동기화):
+Windows에서는 공유 설정(`settings.json`)에 심링크 생성을 먼저 시도합니다. 실패하면(개발자 모드 미활성) 파일을 복사하고 안내 메시지를 표시합니다.
 
-1. **설정 → 개발자용** 열기
+심링크를 활성화하려면:
+
+1. **설정 > 개발자용** 열기
 2. **개발자 모드** 활성화
 
-개발자 모드 없이도 정상 동작합니다 — 파일이 링크 대신 복사되었다는 안내만 한 번 표시됩니다.
+개발자 모드 없이도 정상 동작합니다 — 공유 디렉토리(`commands/`)는 항상 junction을 사용하고(별도 권한 불필요), 공유 파일은 링크 대신 복사됩니다.
 
 ## 대안: Git Bash / WSL
 
-Windows에서 Unix 셸을 선호한다면, 초기 설정 마법사에서 PowerShell 대신 **bash** 또는 **zsh**를 선택할 수 있습니다.
+셸 통합은 감지된 모든 셸에 자동 설치됩니다. Git Bash나 WSL이 있으면 `init` 실행 시 자동으로 설정됩니다.
 
 ### Git Bash
 
 ```bash
 npx claude-account-switch init
-# 선택: bash (~/.bashrc)
 source ~/.bashrc
 ```
 

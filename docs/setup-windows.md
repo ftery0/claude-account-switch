@@ -17,15 +17,15 @@ Open **PowerShell** and run:
 npx claude-account-switch init
 ```
 
-### 2. Choose PowerShell integration
+### 2. Shell integration (automatic)
 
-When prompted, select **PowerShell (recommended for Windows)**.
+The init wizard auto-detects available shells and installs integration for each one. On Windows, this typically includes:
 
-This adds a single line to your PowerShell profile (`$PROFILE`):
+- **PowerShell (`$PROFILE`)** — auto-installed on Windows
+- **bash (~/.bashrc)** — if Git Bash or WSL is detected
+- **zsh (~/.zshrc)** — if WSL with zsh is detected
 
-```powershell
-. "$env:USERPROFILE\.claude-profiles\.shell-integration.ps1"
-```
+No manual shell selection needed.
 
 ### 3. Activate
 
@@ -46,22 +46,23 @@ claude-pick      # Interactive picker
 
 ## Optional: Enable Developer Mode
 
-By default, shared settings (`settings.json`) are **copied** into each profile on Windows. To use real symlinks instead (so changes auto-sync across profiles):
+On Windows, the tool attempts to create symlinks for shared settings (`settings.json`). If symlink creation fails (Developer Mode not enabled), it falls back to copying the file with a one-time notice.
 
-1. Open **Settings → For developers**
+To enable symlinks:
+
+1. Open **Settings > For developers**
 2. Enable **Developer Mode**
 
-Without Developer Mode, the tool works fine — you'll just see a one-time notice that files were copied instead of linked.
+Without Developer Mode, the tool works fine — shared directories (`commands/`) always use junctions (no special permissions needed), and shared files are copied instead of linked.
 
 ## Alternative: Git Bash / WSL
 
-If you prefer a Unix shell on Windows, you can choose **bash** or **zsh** during the init wizard instead of PowerShell.
+Shell integration is auto-installed for all detected shells. If Git Bash or WSL is available, it will be set up automatically during `init`.
 
 ### Git Bash
 
 ```bash
 npx claude-account-switch init
-# Select: bash (~/.bashrc)
 source ~/.bashrc
 ```
 

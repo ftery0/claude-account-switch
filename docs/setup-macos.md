@@ -15,13 +15,15 @@
 npx claude-account-switch init
 ```
 
-### 2. Choose your shell
+### 2. Shell integration (automatic)
 
-macOS uses **zsh** by default since Catalina. Select:
+The init wizard auto-detects all available shells on your system and installs integration for each one. On macOS, this typically includes:
 
-- **zsh (~/.zshrc)** — recommended for most users
-- **bash (~/.bashrc)** — if you've switched to bash
-- **fish (~/.config/fish/config.fish)** — if you use fish
+- **zsh (~/.zshrc)** — default since Catalina
+- **bash (~/.bashrc)** — if `.bashrc` exists
+- **fish (~/.config/fish/config.fish)** — if fish is installed
+
+No manual shell selection needed.
 
 ### 3. Activate
 

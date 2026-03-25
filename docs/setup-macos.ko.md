@@ -15,13 +15,15 @@
 npx claude-account-switch init
 ```
 
-### 2. 셸 선택
+### 2. 셸 통합 (자동)
 
-macOS는 Catalina 이후 **zsh**가 기본 셸입니다. 선택:
+초기 설정 마법사가 시스템에서 사용 가능한 모든 셸을 자동 감지하고 통합을 설치합니다. macOS에서는 일반적으로:
 
-- **zsh (~/.zshrc)** — 대부분의 사용자에게 권장
-- **bash (~/.bashrc)** — bash로 변경한 경우
-- **fish (~/.config/fish/config.fish)** — fish 사용자
+- **zsh (~/.zshrc)** — Catalina 이후 기본
+- **bash (~/.bashrc)** — `.bashrc`가 있는 경우
+- **fish (~/.config/fish/config.fish)** — fish가 설치된 경우
+
+수동 셸 선택이 필요 없습니다.
 
 ### 3. 활성화
 

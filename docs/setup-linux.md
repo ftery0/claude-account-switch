@@ -26,13 +26,15 @@
 npx claude-account-switch init
 ```
 
-### 2. Choose your shell
+### 2. Shell integration (automatic)
 
-Select your shell:
+The init wizard auto-detects all available shells on your system and installs integration for each one. On Linux, this typically includes:
 
 - **bash (~/.bashrc)** — default on most distros
-- **zsh (~/.zshrc)** — popular alternative
-- **fish (~/.config/fish/config.fish)** — if you use fish
+- **zsh (~/.zshrc)** — if `.zshrc` exists
+- **fish (~/.config/fish/config.fish)** — if fish is installed
+
+No manual shell selection needed.
 
 ### 3. Activate
 
