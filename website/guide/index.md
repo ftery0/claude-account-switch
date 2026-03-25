@@ -41,11 +41,43 @@ Claude Code doesn't officially support multiple accounts. `claude-account-switch
 npx claude-account-switch init
 ```
 
-The interactive wizard will guide you through:
+Here's what the interactive wizard looks like:
 
-1. **Creating profiles** — e.g. `work` and `personal` (or `main` for single profile)
-2. **Migrating existing config** — moves your current `~/.claude` into a profile
-3. **Auto-installing shell integration** — detects all available shells (zsh, bash, fish, PowerShell) and installs for each one automatically
+```
+  ╭──────────────────────────────────────╮
+  │ Welcome to Claude Switch!            │
+  │ Multi-account manager for Claude Code│
+  ╰──────────────────────────────────────╯
+
+  How many profiles do you want to set up? 2
+
+  Profile 1 name: work
+  Profile 2 name: personal
+
+  Which profile should be active by default?
+  ❯ work
+    personal
+
+  Share settings across profiles? (recommended) Yes
+
+  Existing ~/.claude detected. Migrate to a profile?
+  ❯ Yes, migrate to "work"
+    Yes, migrate to "personal"
+    No, skip
+
+  ✓ Migrated ~/.claude → profile: work
+  ⚠ Original ~/.claude was NOT deleted.
+  ✓ Created profile: work
+  ✓ Created profile: personal
+  ✓ Shared settings linked
+  ✓ Shell integration installed (zsh, bash)
+  ✓ Active profile: work
+
+  Next steps:
+    1. Open a new terminal
+    2. Run claude to authenticate your "work" profile
+    3. Run cpf personal && claude to authenticate "personal"
+```
 
 ## After Setup
 

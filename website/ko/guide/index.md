@@ -41,11 +41,43 @@ Claude Code는 공식적으로 멀티 계정을 지원하지 않습니다. `clau
 npx claude-account-switch init
 ```
 
-인터랙티브 위자드가 다음을 안내합니다:
+인터랙티브 위자드의 실행 흐름입니다:
 
-1. **프로필 생성** — 예: `work`, `personal` (단일 프로필은 `main`)
-2. **기존 설정 마이그레이션** — 현재 `~/.claude`를 프로필로 이동
-3. **셸 통합 자동 설치** — 사용 가능한 모든 셸(zsh, bash, fish, PowerShell)을 감지하여 자동 설치
+```
+  ╭──────────────────────────────────────╮
+  │ Welcome to Claude Switch!            │
+  │ Multi-account manager for Claude Code│
+  ╰──────────────────────────────────────╯
+
+  How many profiles do you want to set up? 2
+
+  Profile 1 name: work
+  Profile 2 name: personal
+
+  Which profile should be active by default?
+  ❯ work
+    personal
+
+  Share settings across profiles? (recommended) Yes
+
+  Existing ~/.claude detected. Migrate to a profile?
+  ❯ Yes, migrate to "work"
+    Yes, migrate to "personal"
+    No, skip
+
+  ✓ Migrated ~/.claude → profile: work
+  ⚠ Original ~/.claude was NOT deleted.
+  ✓ Created profile: work
+  ✓ Created profile: personal
+  ✓ Shared settings linked
+  ✓ Shell integration installed (zsh, bash)
+  ✓ Active profile: work
+
+  Next steps:
+    1. Open a new terminal
+    2. Run claude to authenticate your "work" profile
+    3. Run cpf personal && claude to authenticate "personal"
+```
 
 ## 설치 후 사용
 
