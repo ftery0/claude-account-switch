@@ -10,6 +10,7 @@ const COMMANDS = {
   use:             (name) => import('./commands/use.mjs').then(m => m.use(name)),
   'install-shell': () => import('./commands/install-shell.mjs').then(m => m.installShell()),
   migrate:         (name) => import('./commands/migrate.mjs').then(m => m.migrate(name)),
+  mcp:             (_, args) => import('./commands/mcp.mjs').then(m => m.mcp(args)),
 };
 
 function showHelp() {
@@ -27,6 +28,7 @@ function showHelp() {
     use <name>        Switch active profile
     migrate [name]    Migrate existing ~/.claude data into a profile
     install-shell     Install shell integration
+    mcp [sub]         Manage MCP servers interactively
 
   ${color.bold('Examples:')}
     npx claude-account-switch init
@@ -67,8 +69,11 @@ export async function run(argv) {
     process.exit(1);
   }
 
+  // mcp 커맨드는 서브커맨드 플래그가 있으므로 raw argv (command 이후) 전달
+  const rawSubArgs = argv.slice(argv.indexOf(command) + 1);
+
   try {
-    await handler(args[0]);
+    await handler(args[0], command === 'mcp' ? rawSubArgs : args);
   } catch (err) {
     error(err.message);
     process.exit(1);
