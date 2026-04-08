@@ -77,6 +77,66 @@ npm i -g claude-account-switch
 | `claude-account-switch use <name>` | Switch active profile |
 | `claude-account-switch migrate [name]` | Migrate existing `~/.claude` data into a profile |
 | `claude-account-switch install-shell` | Install shell integration |
+| `claude-account-switch mcp [sub]` | Manage MCP servers interactively |
+
+## MCP Management
+
+Manage MCP servers per-profile with `claude-account-switch mcp`.
+
+### Interactive TUI
+
+```bash
+claude-account-switch mcp
+```
+
+Use arrow keys to navigate and `Space` to toggle. Keys: `a` add · `d` delete · `q` quit.
+
+```
+  MCP Manager
+
+  ↑↓ 이동   Space 토글   a 추가   d 삭제   q 종료
+
+  ── Shared (모든 프로필) ──────────────────────────────────
+    ● context7     stdio   npx @upstash/context7-mcp@latest
+  ❯ ● figma        http    https://mcp.figma.com/mcp
+
+  ── work ────────────────────────────────────────────────
+    ● local-db     stdio   node ~/tools/db-mcp.mjs
+    ○ figma        (disabled for this profile)
+
+  ── personal ────────────────────────────────────────────
+    ○ context7     (disabled for this profile)
+```
+
+### How MCP storage works
+
+| Scope | File | Effect |
+|-------|------|--------|
+| Shared (all profiles) | `_shared/settings.json` → `mcpServers{}` | Applied to every profile via symlink |
+| Profile-specific | `<profile>/settings.local.json` → `mcpServers{}` | Loaded for that profile only |
+| Disable a shared MCP | `<profile>/settings.local.json` → `disabledMcpServers[]` | Hides the shared MCP for that profile |
+
+```
+_shared/settings.json        ← mcpServers: { context7, figma }
+work/settings.local.json     ← mcpServers: { local-db }
+                                disabledMcpServers: ['figma']
+```
+
+### Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `mcp` | Interactive TUI |
+| `mcp add <name> --shared --type http --url <url>` | Add HTTP MCP to all profiles |
+| `mcp add <name> --profile <p> --command <cmd>` | Add stdio MCP to one profile |
+| `mcp remove <name> --shared` | Remove shared MCP |
+| `mcp remove <name> --profile <p>` | Remove profile-specific MCP |
+| `mcp disable <name> --profile <p>` | Disable shared MCP for a profile |
+| `mcp enable <name> --profile <p>` | Re-enable a disabled shared MCP |
+
+### HTTP MCPs
+
+After adding an HTTP MCP, run `claude` in the target profile and use `/mcp` to complete OAuth authentication.
 
 ## Shell Integration
 

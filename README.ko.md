@@ -77,6 +77,66 @@ npm i -g claude-account-switch
 | `claude-account-switch use <name>` | 활성 프로필 전환 |
 | `claude-account-switch migrate [name]` | 기존 `~/.claude` 데이터를 프로필로 마이그레이션 |
 | `claude-account-switch install-shell` | 셸 통합 설치 |
+| `claude-account-switch mcp [서브커맨드]` | MCP 서버 인터랙티브 관리 |
+
+## MCP 관리
+
+`claude-account-switch mcp` 명령으로 MCP 서버를 프로필별로 관리합니다.
+
+### 인터랙티브 TUI
+
+```bash
+claude-account-switch mcp
+```
+
+화살표 키로 이동, `Space`로 토글. 키: `a` 추가 · `d` 삭제 · `q` 종료.
+
+```
+  MCP Manager
+
+  ↑↓ 이동   Space 토글   a 추가   d 삭제   q 종료
+
+  ── Shared (모든 프로필) ──────────────────────────────────
+    ● context7     stdio   npx @upstash/context7-mcp@latest
+  ❯ ● figma        http    https://mcp.figma.com/mcp
+
+  ── work ────────────────────────────────────────────────
+    ● local-db     stdio   node ~/tools/db-mcp.mjs
+    ○ figma        (disabled for this profile)
+
+  ── personal ────────────────────────────────────────────
+    ○ context7     (disabled for this profile)
+```
+
+### MCP 저장 방식
+
+| 범위 | 파일 | 효과 |
+|------|------|------|
+| Shared (전체 프로필) | `_shared/settings.json` → `mcpServers{}` | 심링크로 모든 프로필에 자동 적용 |
+| 프로필 전용 | `<profile>/settings.local.json` → `mcpServers{}` | 해당 프로필에서만 로드 |
+| 공통 MCP 비활성화 | `<profile>/settings.local.json` → `disabledMcpServers[]` | 해당 프로필에서 공통 MCP 숨김 |
+
+```
+_shared/settings.json        ← mcpServers: { context7, figma }
+work/settings.local.json     ← mcpServers: { local-db }
+                                disabledMcpServers: ['figma']
+```
+
+### 서브커맨드
+
+| 명령어 | 설명 |
+|--------|------|
+| `mcp` | 인터랙티브 TUI 실행 |
+| `mcp add <name> --shared --type http --url <url>` | 공통 HTTP MCP 추가 |
+| `mcp add <name> --profile <p> --command <cmd>` | 프로필 전용 stdio MCP 추가 |
+| `mcp remove <name> --shared` | 공통 MCP 제거 |
+| `mcp remove <name> --profile <p>` | 프로필 전용 MCP 제거 |
+| `mcp disable <name> --profile <p>` | 특정 프로필에서 공통 MCP 비활성화 |
+| `mcp enable <name> --profile <p>` | 비활성화된 공통 MCP 재활성화 |
+
+### HTTP MCP 인증
+
+HTTP MCP 추가 후 해당 프로필로 claude를 실행한 뒤 `/mcp`에서 OAuth 인증이 필요합니다.
 
 ## 셸 통합
 
