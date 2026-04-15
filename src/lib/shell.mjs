@@ -107,6 +107,10 @@ function generateUnixScript() {
 CLAUDE_PROFILES_DIR="$HOME/.claude-profiles"
 CLAUDE_META_FILE="$CLAUDE_PROFILES_DIR/meta.json"
 
+# Resolve real claude binary path BEFORE our function shadows the name.
+# command -v bypasses functions/aliases and finds the actual executable.
+__CLAUDE_SWITCH_REAL_BIN="$(command -v claude 2>/dev/null)"
+
 # Get active profile name from meta.json (no jq required)
 __claude_switch_active() {
   if [ -f "$CLAUDE_META_FILE" ]; then
@@ -138,7 +142,21 @@ __claude_switch_launch() {
   else
     printf "\\033[36m[claude-account-switch]\\033[0m Profile: \\033[1m%s\\033[0m \\033[33m(not logged in — login will start)\\033[0m\\n" "$profile"
   fi
-  CLAUDE_CONFIG_DIR="$CLAUDE_PROFILES_DIR/$profile" command claude "$@"
+  # Use cached binary; fallback to npm global root; error if not found
+  local _bin="$__CLAUDE_SWITCH_REAL_BIN"
+  if [ -z "$_bin" ] || [ ! -x "$_bin" ]; then
+    local _npm_root
+    _npm_root="$(npm root -g 2>/dev/null)"
+    if [ -n "$_npm_root" ] && [ -f "$_npm_root/@anthropic-ai/claude-code/cli.js" ]; then
+      _bin="$_npm_root/@anthropic-ai/claude-code/cli.js"
+    fi
+  fi
+  if [ -z "$_bin" ]; then
+    printf "\\033[31m[claude-account-switch]\\033[0m Error: claude binary not found.\\n" >&2
+    printf "  Run: npm install -g @anthropic-ai/claude-code\\n" >&2
+    return 127
+  fi
+  CLAUDE_CONFIG_DIR="$CLAUDE_PROFILES_DIR/$profile" "$_bin" "$@"
 }
 
 # claude — profile-aware launcher
@@ -279,6 +297,9 @@ function generateFishScript() {
 set -g __CLAUDE_PROFILES_DIR "$HOME/.claude-profiles"
 set -g __CLAUDE_META_FILE "$__CLAUDE_PROFILES_DIR/meta.json"
 
+# Resolve real claude binary path BEFORE our function shadows the name.
+set -g __CLAUDE_SWITCH_REAL_BIN (command -v claude 2>/dev/null)
+
 function __claude_switch_active
   if test -f $__CLAUDE_META_FILE
     node -e 'try{process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).activeProfile||"")}catch(e){}' "$__CLAUDE_META_FILE" 2>/dev/null
@@ -304,8 +325,21 @@ function __claude_switch_launch
   else
     echo (set_color cyan)"[claude-account-switch]"(set_color normal)" Profile: "(set_color --bold)$profile(set_color normal)" "(set_color yellow)"(not logged in — login will start)"(set_color normal)
   end
+  # Use cached binary; fallback to npm global root; error if not found
+  set -l _bin $__CLAUDE_SWITCH_REAL_BIN
+  if test -z "$_bin" -o ! -x "$_bin"
+    set -l _npm_root (npm root -g 2>/dev/null)
+    if test -n "$_npm_root" -a -f "$_npm_root/@anthropic-ai/claude-code/cli.js"
+      set _bin "$_npm_root/@anthropic-ai/claude-code/cli.js"
+    end
+  end
+  if test -z "$_bin"
+    echo (set_color red)"[claude-account-switch]"(set_color normal)" Error: claude binary not found." >&2
+    echo "  Run: npm install -g @anthropic-ai/claude-code" >&2
+    return 127
+  end
   set -x CLAUDE_CONFIG_DIR "$__CLAUDE_PROFILES_DIR/$profile"
-  command claude $argv
+  "$_bin" $argv
   set -e CLAUDE_CONFIG_DIR
 end
 
