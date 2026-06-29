@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { color, box, success, warn } from '../lib/ui.mjs';
 import * as prompt from '../lib/prompt.mjs';
 import { readMeta, writeMeta } from '../lib/config.mjs';
-import { createProfile, validateProfileName, migrateDir, profileExists } from '../lib/profile.mjs';
-import { PROFILES_DIR, DEFAULT_CLAUDE_DIR, HOME, IS_WINDOWS } from '../lib/constants.mjs';
+import { createProfile, validateProfileName, migrateDir } from '../lib/profile.mjs';
+import { PROFILES_DIR, HOME, IS_WINDOWS } from '../lib/constants.mjs';
 import { installAllShells } from '../lib/shell.mjs';
 
 // Known existing profile directories to detect for migration

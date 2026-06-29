@@ -97,9 +97,13 @@ describe('shell script generation', async () => {
       assert.ok(content.includes('CLAUDE_CONFIG_DIR='));
     });
 
-    it('uses "command claude" to avoid function recursion', () => {
+    it('caches real claude binary before defining function (avoids recursion)', () => {
       const content = readFileSync(SH_FILE, 'utf8');
-      assert.ok(content.includes('command claude'));
+      const cacheIdx = content.indexOf('__CLAUDE_SWITCH_REAL_BIN="$(command -v claude');
+      const funcIdx = content.indexOf('claude()');
+      assert.ok(cacheIdx > -1, 'should cache claude binary path');
+      assert.ok(funcIdx > -1, 'should define claude function');
+      assert.ok(cacheIdx < funcIdx, 'cache must come before function definition');
     });
 
     it('does NOT use xargs (portability)', () => {
@@ -253,9 +257,13 @@ describe('shell script generation', async () => {
       }
     });
 
-    it('uses "command claude" to avoid function recursion', () => {
+    it('caches real claude binary before defining function (avoids recursion)', () => {
       const content = readFileSync(FISH_FILE, 'utf8');
-      assert.ok(content.includes('command claude'));
+      const cacheIdx = content.indexOf('__CLAUDE_SWITCH_REAL_BIN (command -v claude');
+      const funcIdx = content.indexOf('function claude');
+      assert.ok(cacheIdx > -1, 'should cache claude binary path');
+      assert.ok(funcIdx > -1, 'should define claude function');
+      assert.ok(cacheIdx < funcIdx, 'cache must come before function definition');
     });
 
     it('sets and unsets CLAUDE_CONFIG_DIR', () => {
