@@ -97,9 +97,13 @@ describe('shell script generation', async () => {
       assert.ok(content.includes('CLAUDE_CONFIG_DIR='));
     });
 
-    it('uses "command claude" to avoid function recursion', () => {
+    it('caches real claude binary before defining function (avoids recursion)', () => {
       const content = readFileSync(SH_FILE, 'utf8');
-      assert.ok(content.includes('command claude'));
+      const cacheIdx = content.indexOf('__CLAUDE_SWITCH_REAL_BIN="$(command -v claude');
+      const funcIdx = content.indexOf('claude()');
+      assert.ok(cacheIdx > -1, 'should cache claude binary path');
+      assert.ok(funcIdx > -1, 'should define claude function');
+      assert.ok(cacheIdx < funcIdx, 'cache must come before function definition');
     });
 
     it('does NOT use xargs (portability)', () => {
@@ -140,6 +144,19 @@ describe('shell script generation', async () => {
     it('uses mktemp for atomic file updates in cpf', () => {
       const content = readFileSync(SH_FILE, 'utf8');
       assert.ok(content.includes('mktemp'));
+    });
+
+    it('fallback chain references bin/claude.exe before cli.js', () => {
+      const content = readFileSync(SH_FILE, 'utf8');
+      const exeIdx = content.indexOf('bin/claude.exe');
+      const cliIdx = content.indexOf('cli.js');
+      assert.ok(exeIdx > -1, 'should reference bin/claude.exe');
+      assert.ok(cliIdx === -1 || exeIdx < cliIdx, 'bin/claude.exe must come before legacy cli.js');
+    });
+
+    it('wraps resolved .js binary with node', () => {
+      const content = readFileSync(SH_FILE, 'utf8');
+      assert.ok(/\*\.js\)[^)]*node "\$_bin"/.test(content), 'should route .js fallback through node');
     });
   });
 
@@ -253,15 +270,33 @@ describe('shell script generation', async () => {
       }
     });
 
-    it('uses "command claude" to avoid function recursion', () => {
+    it('caches real claude binary before defining function (avoids recursion)', () => {
       const content = readFileSync(FISH_FILE, 'utf8');
-      assert.ok(content.includes('command claude'));
+      const cacheIdx = content.indexOf('__CLAUDE_SWITCH_REAL_BIN (command -v claude');
+      const funcIdx = content.indexOf('function claude');
+      assert.ok(cacheIdx > -1, 'should cache claude binary path');
+      assert.ok(funcIdx > -1, 'should define claude function');
+      assert.ok(cacheIdx < funcIdx, 'cache must come before function definition');
     });
 
     it('sets and unsets CLAUDE_CONFIG_DIR', () => {
       const content = readFileSync(FISH_FILE, 'utf8');
       assert.ok(content.includes('set -x CLAUDE_CONFIG_DIR'));
       assert.ok(content.includes('set -e CLAUDE_CONFIG_DIR'));
+    });
+
+    it('fallback chain references bin/claude.exe before cli.js', () => {
+      const content = readFileSync(FISH_FILE, 'utf8');
+      const exeIdx = content.indexOf('bin/claude.exe');
+      const cliIdx = content.indexOf('cli.js');
+      assert.ok(exeIdx > -1, 'should reference bin/claude.exe');
+      assert.ok(cliIdx === -1 || exeIdx < cliIdx, 'bin/claude.exe must come before legacy cli.js');
+    });
+
+    it('wraps resolved .js binary with node', () => {
+      const content = readFileSync(FISH_FILE, 'utf8');
+      assert.ok(/string match -q "\*\.js"[\s\S]*?node "\$_bin"/.test(content),
+        'should route .js fallback through node');
     });
   });
 

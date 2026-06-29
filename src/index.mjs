@@ -1,6 +1,12 @@
 import { parseArgs } from 'node:util';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { error, color, success } from './lib/ui.mjs';
 import { installAllShells } from './lib/shell.mjs';
+
+const PKG_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
+const pkg = JSON.parse(readFileSync(PKG_PATH, 'utf8'));
 
 const COMMANDS = {
   init:            () => import('./commands/init.mjs').then(m => m.init()),
@@ -10,8 +16,11 @@ const COMMANDS = {
   use:             (name) => import('./commands/use.mjs').then(m => m.use(name)),
   'install-shell': () => import('./commands/install-shell.mjs').then(m => m.installShell()),
   migrate:         (name) => import('./commands/migrate.mjs').then(m => m.migrate(name)),
-  mcp:             (_, args) => import('./commands/mcp.mjs').then(m => m.mcp(args)),
+  mcp:             (_, args) => import('./commands/mcp/index.mjs').then(m => m.mcp(args)),
+  update:          (_, args) => import('./commands/update.mjs').then(m => m.update(args)),
 };
+
+const RAW_ARGV_COMMANDS = new Set(['mcp', 'update']);
 
 function showHelp() {
   console.log(`
@@ -29,6 +38,7 @@ function showHelp() {
     migrate [name]    Migrate existing ~/.claude data into a profile
     install-shell     Install shell integration
     mcp [sub]         Manage MCP servers interactively
+    update [opts]     Update Claude Code (and check for self-updates)
 
   ${color.bold('Examples:')}
     npx claude-account-switch init
@@ -39,6 +49,16 @@ function showHelp() {
 }
 
 export async function run(argv) {
+  if (argv.includes('--version') || argv.includes('-v')) {
+    console.log(pkg.version);
+    return;
+  }
+
+  if (argv.length === 0 || argv.includes('--help') || argv.includes('-h')) {
+    showHelp();
+    return;
+  }
+
   const { positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
@@ -47,17 +67,7 @@ export async function run(argv) {
 
   const [command, ...args] = positionals;
 
-  if (argv.includes('--version') || argv.includes('-v')) {
-    const { readFileSync } = await import('node:fs');
-    const { fileURLToPath } = await import('node:url');
-    const { dirname, join } = await import('node:path');
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
-    console.log(pkg.version);
-    return;
-  }
-
-  if (!command || command === 'help' || argv.includes('--help') || argv.includes('-h')) {
+  if (!command || command === 'help') {
     showHelp();
     return;
   }
@@ -69,11 +79,11 @@ export async function run(argv) {
     process.exit(1);
   }
 
-  // mcp 커맨드는 서브커맨드 플래그가 있으므로 raw argv (command 이후) 전달
+  // Some commands (mcp, update) own their own parseArgs and need raw subargs
   const rawSubArgs = argv.slice(argv.indexOf(command) + 1);
 
   try {
-    await handler(args[0], command === 'mcp' ? rawSubArgs : args);
+    await handler(args[0], RAW_ARGV_COMMANDS.has(command) ? rawSubArgs : args);
   } catch (err) {
     error(err.message);
     process.exit(1);

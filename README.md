@@ -78,6 +78,7 @@ npm i -g claude-account-switch
 | `claude-account-switch migrate [name]` | Migrate existing `~/.claude` data into a profile |
 | `claude-account-switch install-shell` | Install shell integration |
 | `claude-account-switch mcp [sub]` | Manage MCP servers interactively |
+| `claude-account-switch update [opts]` | Update Claude Code and refresh shell integration |
 
 ## MCP Management
 
@@ -94,9 +95,9 @@ Use arrow keys to navigate and `Space` to toggle. Keys: `a` add · `d` delete ·
 ```
   MCP Manager
 
-  ↑↓ 이동   Space 토글   a 추가   d 삭제   q 종료
+  ↑↓ move   Space toggle   a add   d delete   q quit
 
-  ── Shared (모든 프로필) ──────────────────────────────────
+  ── Shared (all profiles) ────────────────────────────────
     ● context7     stdio   npx @upstash/context7-mcp@latest
   ❯ ● figma        http    https://mcp.figma.com/mcp
 
@@ -137,6 +138,33 @@ work/settings.local.json     ← mcpServers: { local-db }
 ### HTTP MCPs
 
 After adding an HTTP MCP, run `claude` in the target profile and use `/mcp` to complete OAuth authentication.
+
+## Updating Claude Code
+
+Keep Claude Code in sync without breaking the shell integration:
+
+```bash
+claude-account-switch update           # check both packages, install Claude Code after confirm
+claude-account-switch update --check   # dry-run; exit 1 if updates are available (CI-friendly)
+claude-account-switch update --self    # print the self-update command only
+claude-account-switch update --claude-code --yes  # update Claude Code non-interactively
+```
+
+The command will:
+- Compare installed versions against the npm registry
+- Detect the package manager (npm / yarn / pnpm / bun) from the install path
+- Refuse self-update when `claude-account-switch` is installed via `npm link`
+- Refresh the shell integration so the new binary is picked up on the next terminal
+- Skip the install on Windows if `claude.exe` is currently running (file lock)
+
+```
+  Package                          Installed   Latest    Action
+  ─────────────────────────────────────────────────────────────
+  claude-account-switch            1.2.2       1.2.2     up to date
+  @anthropic-ai/claude-code        2.1.139     2.1.195   update via npm
+
+  ? Update @anthropic-ai/claude-code now?   No / Yes
+```
 
 ## Shell Integration
 

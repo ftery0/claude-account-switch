@@ -78,6 +78,7 @@ npm i -g claude-account-switch
 | `claude-account-switch migrate [name]` | 기존 `~/.claude` 데이터를 프로필로 마이그레이션 |
 | `claude-account-switch install-shell` | 셸 통합 설치 |
 | `claude-account-switch mcp [서브커맨드]` | MCP 서버 인터랙티브 관리 |
+| `claude-account-switch update [옵션]` | Claude Code 업데이트 + 셸 통합 자동 갱신 |
 
 ## MCP 관리
 
@@ -89,14 +90,14 @@ npm i -g claude-account-switch
 claude-account-switch mcp
 ```
 
-화살표 키로 이동, `Space`로 토글. 키: `a` 추가 · `d` 삭제 · `q` 종료.
+화살표 키로 이동, `Space`로 토글. 키: `a` 추가 · `d` 삭제 · `q` 종료. (TUI 메시지는 영어로 표시됩니다.)
 
 ```
   MCP Manager
 
-  ↑↓ 이동   Space 토글   a 추가   d 삭제   q 종료
+  ↑↓ move   Space toggle   a add   d delete   q quit
 
-  ── Shared (모든 프로필) ──────────────────────────────────
+  ── Shared (all profiles) ────────────────────────────────
     ● context7     stdio   npx @upstash/context7-mcp@latest
   ❯ ● figma        http    https://mcp.figma.com/mcp
 
@@ -137,6 +138,34 @@ work/settings.local.json     ← mcpServers: { local-db }
 ### HTTP MCP 인증
 
 HTTP MCP 추가 후 해당 프로필로 claude를 실행한 뒤 `/mcp`에서 OAuth 인증이 필요합니다.
+
+## Claude Code 업데이트
+
+셸 통합을 깨뜨리지 않고 Claude Code를 안전하게 최신 버전으로 유지:
+
+```bash
+claude-account-switch update           # 두 패키지 체크 후 confirm 시 Claude Code 설치
+claude-account-switch update --check   # dry-run, 업데이트 있으면 exit 1 (CI 친화적)
+claude-account-switch update --self    # 자체 업데이트는 명령어 안내만 출력
+claude-account-switch update --claude-code --yes  # Claude Code 비대화형 업데이트
+```
+
+동작:
+
+- 설치 버전과 npm 레지스트리의 최신 버전 비교
+- 설치 경로로 패키지 매니저(npm / yarn / pnpm / bun) 자동 감지
+- `claude-account-switch`가 `npm link`로 설치된 경우 자체 업데이트 거부
+- 설치 후 셸 통합 자동 갱신 → 새 터미널에서 새 바이너리 사용
+- Windows에서 `claude.exe` 실행 중이면 파일 잠금 방지를 위해 설치 차단
+
+```
+  Package                          Installed   Latest    Action
+  ─────────────────────────────────────────────────────────────
+  claude-account-switch            1.2.2       1.2.2     up to date
+  @anthropic-ai/claude-code        2.1.139     2.1.195   update via npm
+
+  ? Update @anthropic-ai/claude-code now?   No / Yes
+```
 
 ## 셸 통합
 

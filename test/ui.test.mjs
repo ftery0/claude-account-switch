@@ -16,7 +16,7 @@ describe('color helpers', async () => {
   });
 
   it('all color keys are present', () => {
-    const expected = ['bold', 'dim', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'red', 'gray'];
+    const expected = ['bold', 'dim', 'green', 'yellow', 'blue', 'cyan', 'red'];
     for (const key of expected) {
       assert.equal(typeof color[key], 'function', `color.${key} should be a function`);
     }

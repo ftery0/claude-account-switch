@@ -21,5 +21,7 @@ export const SHARED_DIRS = ['commands'];
 export const PROFILE_FILES = ['.claude.json', 'settings.local.json'];
 export const PROFILE_DIRS = ['plugins', 'projects', 'plans'];
 
-// Files/dirs that are temporary (not managed)
-export const TEMP_PATTERNS = ['cache', 'sessions', 'history.jsonl', 'session-env', 'shell-snapshots', 'paste-cache', 'file-history', 'backups', 'mcp-needs-auth-cache.json'];
+// npm package names used by the `update` command
+export const CLAUDE_CODE_PKG = '@anthropic-ai/claude-code';
+export const SELF_PKG = 'claude-account-switch';
+
