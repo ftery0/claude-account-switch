@@ -21,3 +21,7 @@ export const SHARED_DIRS = ['commands'];
 export const PROFILE_FILES = ['.claude.json', 'settings.local.json'];
 export const PROFILE_DIRS = ['plugins', 'projects', 'plans'];
 
+// npm package names used by the `update` command
+export const CLAUDE_CODE_PKG = '@anthropic-ai/claude-code';
+export const SELF_PKG = 'claude-account-switch';
+

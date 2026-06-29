@@ -40,13 +40,21 @@ __claude_switch_launch() {
   else
     printf "\033[36m[claude-account-switch]\033[0m Profile: \033[1m%s\033[0m \033[33m(not logged in — login will start)\033[0m\n" "$profile"
   fi
-  # Use cached binary; fallback to npm global root; error if not found
+  # Use cached binary; fallback to npm global root; error if not found.
+  # Modern Claude Code ships as a native binary (bin/claude.exe); the
+  # legacy cli.js form is kept last for older installs.
   local _bin="$__CLAUDE_SWITCH_REAL_BIN"
   if [ -z "$_bin" ] || [ ! -x "$_bin" ]; then
-    local _npm_root
+    local _npm_root _c
     _npm_root="$(npm root -g 2>/dev/null)"
-    if [ -n "$_npm_root" ] && [ -f "$_npm_root/@anthropic-ai/claude-code/cli.js" ]; then
-      _bin="$_npm_root/@anthropic-ai/claude-code/cli.js"
+    if [ -n "$_npm_root" ]; then
+      for _c in \
+        "$_npm_root/@anthropic-ai/claude-code/bin/claude.exe" \
+        "$_npm_root/@anthropic-ai/claude-code/bin/claude" \
+        "$_npm_root/@anthropic-ai/claude-code/cli.js"
+      do
+        if [ -x "$_c" ] || [ -f "$_c" ]; then _bin="$_c"; break; fi
+      done
     fi
   fi
   if [ -z "$_bin" ]; then
@@ -54,7 +62,11 @@ __claude_switch_launch() {
     printf "  Run: npm install -g @anthropic-ai/claude-code\n" >&2
     return 127
   fi
-  CLAUDE_CONFIG_DIR="$CLAUDE_PROFILES_DIR/$profile" "$_bin" "$@"
+  # If resolved to a .js script, invoke it through node
+  case "$_bin" in
+    *.js) CLAUDE_CONFIG_DIR="$CLAUDE_PROFILES_DIR/$profile" node "$_bin" "$@" ;;
+    *)    CLAUDE_CONFIG_DIR="$CLAUDE_PROFILES_DIR/$profile" "$_bin" "$@" ;;
+  esac
 }
 
 # claude — profile-aware launcher

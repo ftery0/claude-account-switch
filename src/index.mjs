@@ -17,7 +17,10 @@ const COMMANDS = {
   'install-shell': () => import('./commands/install-shell.mjs').then(m => m.installShell()),
   migrate:         (name) => import('./commands/migrate.mjs').then(m => m.migrate(name)),
   mcp:             (_, args) => import('./commands/mcp/index.mjs').then(m => m.mcp(args)),
+  update:          (_, args) => import('./commands/update.mjs').then(m => m.update(args)),
 };
+
+const RAW_ARGV_COMMANDS = new Set(['mcp', 'update']);
 
 function showHelp() {
   console.log(`
@@ -35,6 +38,7 @@ function showHelp() {
     migrate [name]    Migrate existing ~/.claude data into a profile
     install-shell     Install shell integration
     mcp [sub]         Manage MCP servers interactively
+    update [opts]     Update Claude Code (and check for self-updates)
 
   ${color.bold('Examples:')}
     npx claude-account-switch init
@@ -75,11 +79,11 @@ export async function run(argv) {
     process.exit(1);
   }
 
-  // `mcp` keeps its raw subargs so its own parseArgs sees flags
+  // Some commands (mcp, update) own their own parseArgs and need raw subargs
   const rawSubArgs = argv.slice(argv.indexOf(command) + 1);
 
   try {
-    await handler(args[0], command === 'mcp' ? rawSubArgs : args);
+    await handler(args[0], RAW_ARGV_COMMANDS.has(command) ? rawSubArgs : args);
   } catch (err) {
     error(err.message);
     process.exit(1);

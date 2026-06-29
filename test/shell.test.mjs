@@ -145,6 +145,19 @@ describe('shell script generation', async () => {
       const content = readFileSync(SH_FILE, 'utf8');
       assert.ok(content.includes('mktemp'));
     });
+
+    it('fallback chain references bin/claude.exe before cli.js', () => {
+      const content = readFileSync(SH_FILE, 'utf8');
+      const exeIdx = content.indexOf('bin/claude.exe');
+      const cliIdx = content.indexOf('cli.js');
+      assert.ok(exeIdx > -1, 'should reference bin/claude.exe');
+      assert.ok(cliIdx === -1 || exeIdx < cliIdx, 'bin/claude.exe must come before legacy cli.js');
+    });
+
+    it('wraps resolved .js binary with node', () => {
+      const content = readFileSync(SH_FILE, 'utf8');
+      assert.ok(/\*\.js\)[^)]*node "\$_bin"/.test(content), 'should route .js fallback through node');
+    });
   });
 
   // ─── PowerShell script content ───────────────────────────────────────────
@@ -270,6 +283,20 @@ describe('shell script generation', async () => {
       const content = readFileSync(FISH_FILE, 'utf8');
       assert.ok(content.includes('set -x CLAUDE_CONFIG_DIR'));
       assert.ok(content.includes('set -e CLAUDE_CONFIG_DIR'));
+    });
+
+    it('fallback chain references bin/claude.exe before cli.js', () => {
+      const content = readFileSync(FISH_FILE, 'utf8');
+      const exeIdx = content.indexOf('bin/claude.exe');
+      const cliIdx = content.indexOf('cli.js');
+      assert.ok(exeIdx > -1, 'should reference bin/claude.exe');
+      assert.ok(cliIdx === -1 || exeIdx < cliIdx, 'bin/claude.exe must come before legacy cli.js');
+    });
+
+    it('wraps resolved .js binary with node', () => {
+      const content = readFileSync(FISH_FILE, 'utf8');
+      assert.ok(/string match -q "\*\.js"[\s\S]*?node "\$_bin"/.test(content),
+        'should route .js fallback through node');
     });
   });
 

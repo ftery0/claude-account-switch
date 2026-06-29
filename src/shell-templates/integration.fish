@@ -32,12 +32,22 @@ function __claude_switch_launch
   else
     echo (set_color cyan)"[claude-account-switch]"(set_color normal)" Profile: "(set_color --bold)$profile(set_color normal)" "(set_color yellow)"(not logged in — login will start)"(set_color normal)
   end
-  # Use cached binary; fallback to npm global root; error if not found
+  # Use cached binary; fallback to npm global root; error if not found.
+  # Modern Claude Code ships as a native binary (bin/claude.exe); the
+  # legacy cli.js form is kept last for older installs.
   set -l _bin $__CLAUDE_SWITCH_REAL_BIN
   if test -z "$_bin" -o ! -x "$_bin"
     set -l _npm_root (npm root -g 2>/dev/null)
-    if test -n "$_npm_root" -a -f "$_npm_root/@anthropic-ai/claude-code/cli.js"
-      set _bin "$_npm_root/@anthropic-ai/claude-code/cli.js"
+    if test -n "$_npm_root"
+      for _c in \
+        "$_npm_root/@anthropic-ai/claude-code/bin/claude.exe" \
+        "$_npm_root/@anthropic-ai/claude-code/bin/claude" \
+        "$_npm_root/@anthropic-ai/claude-code/cli.js"
+        if test -x "$_c" -o -f "$_c"
+          set _bin $_c
+          break
+        end
+      end
     end
   end
   if test -z "$_bin"
@@ -46,7 +56,11 @@ function __claude_switch_launch
     return 127
   end
   set -x CLAUDE_CONFIG_DIR "$__CLAUDE_PROFILES_DIR/$profile"
-  "$_bin" $argv
+  if string match -q "*.js" -- $_bin
+    node "$_bin" $argv
+  else
+    "$_bin" $argv
+  end
   set -e CLAUDE_CONFIG_DIR
 end
 
