@@ -141,10 +141,9 @@ export async function select(message, choices) {
         process.stdin.removeListener('data', onData);
         const choice = choices[selected];
         const value = typeof choice === 'string' ? choice : choice.value;
-        const answer = typeof choice === 'string' ? choice : choice.value;
         // Collapse question + choices into single completed line: ✓ message … answer
         if (hasColor) {
-          process.stdout.write(`${CURSOR_UP(choices.length + 1)}\r${CLEAR_LINE}${color.green(SYM_CHECK)} ${message} ${color.dim(SYM_DOTS)} ${color.cyan(answer)}\n${CLEAR_DOWN}`);
+          process.stdout.write(`${CURSOR_UP(choices.length + 1)}\r${CLEAR_LINE}${color.green(SYM_CHECK)} ${message} ${color.dim(SYM_DOTS)} ${color.cyan(value)}\n${CLEAR_DOWN}`);
         }
         resolve(value);
       } else if (key === '\x03') { // ctrl-c

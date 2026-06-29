@@ -13,10 +13,8 @@ export const color = {
   green:   (s) => `${c('32')}${s}${RESET}`,
   yellow:  (s) => `${c('33')}${s}${RESET}`,
   blue:    (s) => `${c('34')}${s}${RESET}`,
-  magenta: (s) => `${c('35')}${s}${RESET}`,
   cyan:    (s) => `${c('36')}${s}${RESET}`,
   red:     (s) => `${c('31')}${s}${RESET}`,
-  gray:    (s) => `${c('90')}${s}${RESET}`,
 };
 
 // On legacy Windows consoles (cmd.exe without UTF-8 codepage), Unicode box
