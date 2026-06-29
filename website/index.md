@@ -15,7 +15,7 @@ jsonLd:
   description: "Multi-account profile manager for Claude Code. Switch between work and personal accounts instantly."
   url: "https://ftery0.github.io/claude-account-switch/"
   downloadUrl: "https://www.npmjs.com/package/claude-account-switch"
-  softwareVersion: "1.2.0"
+  softwareVersion: "1.2.2"
   author:
     "@type": "Person"
     name: "haejun"

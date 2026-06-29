@@ -15,7 +15,7 @@ jsonLd:
   description: "Claude Code를 위한 멀티 계정 프로필 관리 도구. 회사와 개인 계정을 즉시 전환합니다."
   url: "https://ftery0.github.io/claude-account-switch/ko/"
   downloadUrl: "https://www.npmjs.com/package/claude-account-switch"
-  softwareVersion: "1.2.0"
+  softwareVersion: "1.2.2"
   author:
     "@type": "Person"
     name: "haejun"
