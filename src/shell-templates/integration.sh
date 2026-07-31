@@ -9,8 +9,16 @@ CLAUDE_META_FILE="$CLAUDE_PROFILES_DIR/meta.json"
 # command -v bypasses functions/aliases and finds the actual executable.
 __CLAUDE_SWITCH_REAL_BIN="$(command -v claude 2>/dev/null)"
 
+# Un-exported vars above are lost in shells that inherit only functions
+# (IDE terminals, snapshots, subshells) — every entry point re-derives them.
+__claude_switch_defaults() {
+  CLAUDE_PROFILES_DIR="${CLAUDE_PROFILES_DIR:-$HOME/.claude-profiles}"
+  CLAUDE_META_FILE="${CLAUDE_META_FILE:-$CLAUDE_PROFILES_DIR/meta.json}"
+}
+
 # Get active profile name from meta.json (no jq required)
 __claude_switch_active() {
+  __claude_switch_defaults
   if [ -f "$CLAUDE_META_FILE" ]; then
     sed -n 's/.*"activeProfile"[[:space:]]*:[[:space:]]*"\([^\"]*\)".*/\1/p' "$CLAUDE_META_FILE"
   fi
@@ -18,6 +26,7 @@ __claude_switch_active() {
 
 # List profile directories, one per line (excludes _shared and other _ prefixed dirs)
 __claude_switch_profiles() {
+  __claude_switch_defaults
   for _csd in "$CLAUDE_PROFILES_DIR"/*/; do
     [ -d "$_csd" ] || continue
     _csn=$(basename "$_csd")
@@ -35,17 +44,29 @@ __claude_switch_count() {
 __claude_switch_launch() {
   local profile="$1"
   shift
+  __claude_switch_defaults
   if [ -f "$CLAUDE_PROFILES_DIR/$profile/.claude.json" ]; then
     printf "\033[36m[claude-account-switch]\033[0m Profile: \033[1m%s\033[0m\n" "$profile"
   else
     printf "\033[36m[claude-account-switch]\033[0m Profile: \033[1m%s\033[0m \033[33m(not logged in — login will start)\033[0m\n" "$profile"
   fi
-  # Use cached binary; fallback to npm global root; error if not found.
-  # Modern Claude Code ships as a native binary (bin/claude.exe); the
-  # legacy cli.js form is kept last for older installs.
-  local _bin="$__CLAUDE_SWITCH_REAL_BIN"
+  # Resolve at launch time: cached path → known install locations
+  # (native installer first) → npm global (legacy). The cached var can be
+  # empty in function-only shells or stale after an update.
+  local _bin="$__CLAUDE_SWITCH_REAL_BIN" _c
   if [ -z "$_bin" ] || [ ! -x "$_bin" ]; then
-    local _npm_root _c
+    _bin=""
+    for _c in \
+      "$HOME/.local/bin/claude" \
+      "$HOME/.claude/local/claude" \
+      /opt/homebrew/bin/claude \
+      /usr/local/bin/claude
+    do
+      if [ -x "$_c" ]; then _bin="$_c"; break; fi
+    done
+  fi
+  if [ -z "$_bin" ]; then
+    local _npm_root
     _npm_root="$(npm root -g 2>/dev/null)"
     if [ -n "$_npm_root" ]; then
       for _c in \
@@ -59,7 +80,7 @@ __claude_switch_launch() {
   fi
   if [ -z "$_bin" ]; then
     printf "\033[31m[claude-account-switch]\033[0m Error: claude binary not found.\n" >&2
-    printf "  Run: npm install -g @anthropic-ai/claude-code\n" >&2
+    printf "  Reinstall (native): curl -fsSL https://claude.ai/install.sh | bash\n" >&2
     return 127
   fi
   # If resolved to a .js script, invoke it through node
@@ -72,6 +93,7 @@ __claude_switch_launch() {
 # claude — profile-aware launcher
 claude() {
   local count
+  __claude_switch_defaults
   count=$(__claude_switch_count)
 
   if [ "$count" -eq 0 ]; then
@@ -132,6 +154,7 @@ _PROFILES_LIST_
 
 # cpf — quick profile switch
 cpf() {
+  __claude_switch_defaults
   if [ -z "$1" ]; then
     printf "Usage: cpf <profile-name>\n" >&2
     return 1
@@ -149,6 +172,7 @@ cpf() {
 
 # claude-pick — standalone interactive profile selector
 claude-pick() {
+  __claude_switch_defaults
   if [ -f "$CLAUDE_PROFILES_DIR/.picker.mjs" ] && command -v node >/dev/null 2>&1; then
     local selected
     selected=$(node "$CLAUDE_PROFILES_DIR/.picker.mjs" </dev/tty)

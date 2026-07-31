@@ -7,13 +7,26 @@ set -g __CLAUDE_META_FILE "$__CLAUDE_PROFILES_DIR/meta.json"
 # Resolve real claude binary path BEFORE our function shadows the name.
 set -g __CLAUDE_SWITCH_REAL_BIN (command -v claude 2>/dev/null)
 
+# Globals above can be missing in shells that inherit only functions
+# (IDE terminals, snapshots) — every entry point re-derives them.
+function __claude_switch_defaults
+  if test -z "$__CLAUDE_PROFILES_DIR"
+    set -g __CLAUDE_PROFILES_DIR "$HOME/.claude-profiles"
+  end
+  if test -z "$__CLAUDE_META_FILE"
+    set -g __CLAUDE_META_FILE "$__CLAUDE_PROFILES_DIR/meta.json"
+  end
+end
+
 function __claude_switch_active
+  __claude_switch_defaults
   if test -f $__CLAUDE_META_FILE
     node -e 'try{process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).activeProfile||"")}catch(e){}' "$__CLAUDE_META_FILE" 2>/dev/null
   end
 end
 
 function __claude_switch_profiles
+  __claude_switch_defaults
   for d in $__CLAUDE_PROFILES_DIR/*/
     if test -d $d
       set name (basename $d)
@@ -27,16 +40,30 @@ end
 function __claude_switch_launch
   set -l profile $argv[1]
   set -e argv[1]
+  __claude_switch_defaults
   if test -f "$__CLAUDE_PROFILES_DIR/$profile/.claude.json"
     echo (set_color cyan)"[claude-account-switch]"(set_color normal)" Profile: "(set_color --bold)$profile(set_color normal)
   else
     echo (set_color cyan)"[claude-account-switch]"(set_color normal)" Profile: "(set_color --bold)$profile(set_color normal)" "(set_color yellow)"(not logged in — login will start)"(set_color normal)
   end
-  # Use cached binary; fallback to npm global root; error if not found.
-  # Modern Claude Code ships as a native binary (bin/claude.exe); the
-  # legacy cli.js form is kept last for older installs.
+  # Resolve at launch time: cached path → known install locations
+  # (native installer first) → npm global (legacy). The cached var can be
+  # empty in function-only shells or stale after an update.
   set -l _bin $__CLAUDE_SWITCH_REAL_BIN
   if test -z "$_bin" -o ! -x "$_bin"
+    set _bin ""
+    for _c in \
+      "$HOME/.local/bin/claude" \
+      "$HOME/.claude/local/claude" \
+      /opt/homebrew/bin/claude \
+      /usr/local/bin/claude
+      if test -x "$_c"
+        set _bin $_c
+        break
+      end
+    end
+  end
+  if test -z "$_bin"
     set -l _npm_root (npm root -g 2>/dev/null)
     if test -n "$_npm_root"
       for _c in \
@@ -52,7 +79,7 @@ function __claude_switch_launch
   end
   if test -z "$_bin"
     echo (set_color red)"[claude-account-switch]"(set_color normal)" Error: claude binary not found." >&2
-    echo "  Run: npm install -g @anthropic-ai/claude-code" >&2
+    echo "  Reinstall (native): curl -fsSL https://claude.ai/install.sh | bash" >&2
     return 127
   end
   set -x CLAUDE_CONFIG_DIR "$__CLAUDE_PROFILES_DIR/$profile"
@@ -65,6 +92,7 @@ function __claude_switch_launch
 end
 
 function claude
+  __claude_switch_defaults
   set -l profiles (__claude_switch_profiles)
   set -l count (count $profiles)
 
@@ -126,6 +154,7 @@ function claude
 end
 
 function cpf
+  __claude_switch_defaults
   if test -z "$argv[1]"
     echo "Usage: cpf <profile-name>" >&2
     return 1
@@ -139,6 +168,7 @@ function cpf
 end
 
 function claude-pick
+  __claude_switch_defaults
   if test -f "$__CLAUDE_PROFILES_DIR/.picker.mjs"; and command -v node >/dev/null 2>&1
     set -l selected (node "$__CLAUDE_PROFILES_DIR/.picker.mjs" </dev/tty)
     if test -z "$selected"
