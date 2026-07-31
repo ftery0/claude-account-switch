@@ -70,15 +70,15 @@ npm i -g claude-account-switch
 
 | 명령어 | 설명 |
 |--------|------|
-| `claude-account-switch init` | 인터랙티브 설정 위자드 |
-| `claude-account-switch add <name>` | 새 프로필 생성 |
-| `claude-account-switch remove <name>` | 프로필 삭제 |
-| `claude-account-switch list` | 프로필 목록 |
-| `claude-account-switch use <name>` | 활성 프로필 전환 |
-| `claude-account-switch migrate [name]` | 기존 `~/.claude` 데이터를 프로필로 마이그레이션 |
-| `claude-account-switch install-shell` | 셸 통합 설치 |
-| `claude-account-switch mcp [서브커맨드]` | MCP 서버 인터랙티브 관리 |
-| `claude-account-switch update [옵션]` | Claude Code 업데이트 + 셸 통합 자동 갱신 |
+| `init` | 인터랙티브 설정 위자드 |
+| `add <name>` | 새 프로필 생성 |
+| `remove <name>` | 프로필 삭제 |
+| `list` | 프로필 목록 |
+| `use <name>` | 활성 프로필 전환 |
+| `migrate [name]` | 기존 `~/.claude` 데이터를 프로필로 마이그레이션 |
+| `install-shell` | 셸 통합 설치 |
+| `mcp [서브커맨드]` | MCP 서버 인터랙티브 관리 |
+| `update [옵션]` | Claude Code 업데이트 + 셸 통합 자동 갱신 |
 
 ## MCP 관리
 

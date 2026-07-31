@@ -1,7 +1,7 @@
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, accessSync, constants as FS } from 'node:fs';
 import { join, sep } from 'node:path';
-import { IS_WINDOWS } from './constants.mjs';
+import { HOME, IS_WINDOWS } from './constants.mjs';
 import { readJsonFile } from './json-fs.mjs';
 
 // ── SemVer ──────────────────────────────────────────────────────────────────
@@ -82,6 +82,34 @@ export function getInstalledBinMap(pkgName) {
   if (!pkg) return null;
   if (typeof pkg.bin === 'string') return { [pkg.name]: pkg.bin };
   return pkg.bin ?? null;
+}
+
+export function parseClaudeVersionOutput(output) {
+  const m = String(output ?? '').match(/(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)/);
+  return m?.[1] ?? null;
+}
+
+export function detectNativeClaudeInstall({
+  home = HOME,
+  exists = existsSync,
+  execFile = execFileSync,
+} = {}) {
+  const binName = IS_WINDOWS ? 'claude.exe' : 'claude';
+  const candidates = [
+    join(home, '.local', 'bin', binName),
+    join(home, '.claude', 'local', binName),
+  ];
+
+  for (const path of candidates) {
+    if (!exists(path)) continue;
+    try {
+      const out = execFile(path, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+      const version = parseClaudeVersionOutput(out);
+      if (version) return { installMethod: 'native', path, version };
+    } catch {}
+  }
+
+  return null;
 }
 
 // ── Registry ────────────────────────────────────────────────────────────────
@@ -204,6 +232,10 @@ export function buildInstallCommand(pm, pkgName) {
   }
 }
 
+export function buildNativeClaudeUpdateCommand(path) {
+  return { cmd: path, args: ['update'], displayCmd: 'claude update' };
+}
+
 export function runInstall({ cmd, args }) {
   return new Promise((resolve) => {
     const child = spawn(cmd, args, { stdio: 'inherit', shell: IS_WINDOWS });
@@ -227,13 +259,30 @@ export async function computeUpdatePlan({
   checkClaude,
   getInstalled = getInstalledVersion,
   fetchLatest = fetchLatestVersion,
+  getNativeClaude = detectNativeClaudeInstall,
 }) {
   const { CLAUDE_CODE_PKG, SELF_PKG } = await import('./constants.mjs');
   const warnings = [];
   const errors = [];
 
   const buildEntry = async (pkgName) => {
-    const installed = getInstalled(pkgName);
+    let installed = getInstalled(pkgName);
+    let installMethod = installed ? 'npm' : null;
+    let path = getInstalledPath(pkgName);
+    let pm = detectPackageManager(pkgName);
+    let binBefore = getInstalledBinMap(pkgName);
+
+    if (pkgName === CLAUDE_CODE_PKG && !installed) {
+      const native = getNativeClaude();
+      if (native?.version) {
+        installed = native.version;
+        installMethod = native.installMethod;
+        path = native.path;
+        pm = native.installMethod;
+        binBefore = null;
+      }
+    }
+
     let latest = null;
     try {
       latest = await fetchLatest(pkgName);
@@ -246,11 +295,12 @@ export async function computeUpdatePlan({
       installed,
       latest,
       hasUpdate,
-      pm: detectPackageManager(pkgName),
+      installMethod,
+      pm,
       isDev: isDevSymlink(pkgName),
-      needsSudo: needsElevation(),
-      path: getInstalledPath(pkgName),
-      binBefore: getInstalledBinMap(pkgName),
+      needsSudo: installMethod !== 'native' && needsElevation(),
+      path,
+      binBefore,
     };
   };
 
@@ -270,7 +320,9 @@ export async function computeUpdatePlan({
   if (self?.isDev) {
     warnings.push(`${self.pkg} is installed via npm link (dev symlink). Self-update is refused — use git pull instead.`);
   }
-  if ((self?.hasUpdate || claude?.hasUpdate) && needsElevation()) {
+  const npmUpdateNeedsSudo = (self?.hasUpdate && self.installMethod !== 'native')
+    || (claude?.hasUpdate && claude.installMethod !== 'native');
+  if (npmUpdateNeedsSudo && needsElevation()) {
     warnings.push(`Global install prefix is not writable by the current user — sudo is required.`);
   }
 

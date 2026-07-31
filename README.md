@@ -70,15 +70,15 @@ npm i -g claude-account-switch
 
 | Command | Description |
 |---------|-------------|
-| `claude-account-switch init` | Interactive setup wizard |
-| `claude-account-switch add <name>` | Create a new profile |
-| `claude-account-switch remove <name>` | Remove a profile |
-| `claude-account-switch list` | List all profiles |
-| `claude-account-switch use <name>` | Switch active profile |
-| `claude-account-switch migrate [name]` | Migrate existing `~/.claude` data into a profile |
-| `claude-account-switch install-shell` | Install shell integration |
-| `claude-account-switch mcp [sub]` | Manage MCP servers interactively |
-| `claude-account-switch update [opts]` | Update Claude Code and refresh shell integration |
+| `init` | Interactive setup wizard |
+| `add <name>` | Create a new profile |
+| `remove <name>` | Remove a profile |
+| `list` | List all profiles |
+| `use <name>` | Switch active profile |
+| `migrate [name]` | Migrate existing `~/.claude` data into a profile |
+| `install-shell` | Install shell integration |
+| `mcp [sub]` | Manage MCP servers interactively |
+| `update [opts]` | Update Claude Code and refresh shell integration |
 
 ## MCP Management
 
