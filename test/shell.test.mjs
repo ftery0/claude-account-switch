@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, copyFileSync, unlinkSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, copyFileSync, unlinkSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -303,6 +303,18 @@ describe('shell script generation', async () => {
   // ─── Script routing ──────────────────────────────────────────────────────
 
   describe('installShellIntegration routing', () => {
+    it('appends source line to an existing rc file with a trailing newline', () => {
+      const bashRc = join(HOME, '.bashrc');
+      writeFileSync(bashRc, 'export PATH="$HOME/bin:$PATH"');
+
+      installShellIntegration('bash');
+
+      const content = readFileSync(bashRc, 'utf8');
+      assert.ok(content.endsWith('\n'));
+      assert.ok(content.includes('# Claude Switch - multi-account manager\n'));
+      assert.ok(content.includes('[ -f ~/.claude-profiles/.shell-integration.sh ]'));
+    });
+
     it('generates .sh for bash', () => {
       installShellIntegration('bash');
       assert.ok(existsSync(SH_FILE));
