@@ -17,6 +17,7 @@ npx claude-account-switch init
 ```
 
 The interactive wizard will guide you through creating profiles, migrating existing configs, and auto-installing shell integration for all detected shells.
+If you run `npx claude-account-switch` without a command and existing Claude Code data is detected, it will ask whether to start `init`.
 
 ```
   ╭──────────────────────────────────────╮
@@ -35,7 +36,7 @@ The interactive wizard will guide you through creating profiles, migrating exist
 
   Share settings across profiles? (recommended) Yes
 
-  Existing ~/.claude detected. Migrate to a profile?
+  Existing Claude Code data in ~/.claude detected. Migrate to a profile?
   ❯ Yes, migrate to "work"
     Yes, migrate to "personal"
     No, skip
@@ -75,7 +76,7 @@ npm i -g claude-account-switch
 | `remove <name>` | Remove a profile |
 | `list` | List all profiles |
 | `use <name>` | Switch active profile |
-| `migrate [name]` | Migrate existing `~/.claude` data into a profile |
+| `migrate [name]` | Migrate existing Claude Code data into a profile |
 | `install-shell` | Install shell integration |
 | `mcp [sub]` | Manage MCP servers interactively |
 | `update [opts]` | Update Claude Code and refresh shell integration |
@@ -156,6 +157,7 @@ The command will:
 - Refuse self-update when `claude-account-switch` is installed via `npm link`
 - Refresh the shell integration so the new binary is picked up on the next terminal
 - Skip the install on Windows if `claude.exe` is currently running (file lock)
+- Prompt for `claude-account-switch` self-updates from the `claude` shell command once per day
 
 ```
   Package                          Installed   Latest    Action
@@ -176,6 +178,10 @@ Shell integration is auto-installed for all detected shells during `init`. These
 | `cpf <name>` | Quick switch to a profile |
 | `claude-pick` | Interactive profile selector |
 
+The shell functions are thin launchers that delegate to the installed `claude-account-switch` CLI. This keeps profile selection, Claude launch resolution, and update checks in the npm package instead of freezing that logic in your shell rc file.
+
+When you run `claude`, the integration checks for a newer `claude-account-switch` version at most once every 24 hours. If one is available, it asks whether to update now. Set `CLAUDE_SWITCH_DISABLE_AUTO_UPDATE=1` to disable this prompt.
+
 **Supported shells:**
 
 | Shell | Platform | Config file |
@@ -193,7 +199,6 @@ Shell integration is auto-installed for all detected shells during `init`. These
 ├── .shell-integration.sh      ← bash/zsh integration script
 ├── .shell-integration.fish    ← fish integration script
 ├── .shell-integration.ps1     ← PowerShell integration script
-├── .picker.mjs                ← Arrow-key picker script
 ├── _shared/
 │   ├── settings.json          ← Shared settings (original)
 │   └── commands/               ← Shared custom commands
@@ -218,7 +223,7 @@ Shell integration is auto-installed for all detected shells during `init`. These
 - **Shared files** (`settings.json`, `commands/`) are stored in `_shared/` and linked into each profile
   - macOS/Linux: symlink
   - Windows: symlinks are attempted first; falls back to copy if Developer Mode is not enabled. Directories always use junctions.
-- **Profile-specific files** (`.claude.json`, `settings.local.json`, `plugins/`, `projects/`, `plans/`) are kept independently
+- **Profile-specific files** (`.claude.json`, `.credentials.json`, `settings.local.json`, `plugins/`, `projects/`, `plans/`) are kept independently
 - **Temporary files** (`cache/`, `sessions/`, `history.jsonl`, etc.) are auto-created by Claude Code and not managed
 
 ## Profile Name Rules

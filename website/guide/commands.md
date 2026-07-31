@@ -65,17 +65,18 @@ npx claude-account-switch use personal
 
 ## `migrate [name]`
 
-Migrate existing `~/.claude` data into a profile. If no name is given, the wizard will prompt you to select a source directory and target profile.
+Migrate existing Claude Code data into a profile. If no name is given, the wizard will prompt you to select a source directory and target profile.
 
 ```bash
 npx claude-account-switch migrate work
+npx claude-account-switch migrate work --from ~/.claude
 ```
 
-The wizard detects common source directories (`~/.claude`, `~/.claude-work`, `~/.claude-personal`) or lets you enter a custom path. After migration:
+The wizard detects common source directories (`~/.claude`, `~/.claude-work`, `~/.claude-personal`) and modern Claude Code files such as `~/.claude/.credentials.json` and `~/.claude.json`, or lets you enter a custom path. After migration:
 
-- `.claude.json`, `settings.local.json` — auth & local settings
+- `.claude.json`, `.credentials.json`, `settings.local.json` — auth & local settings
 - `plugins/`, `projects/`, `plans/` — profile data
-- `settings.json`, `commands/` — copied to `_shared` and symlinked (if shared settings enabled)
+- `settings.json`, `commands/`, `agents/` — copied to `_shared` and symlinked (if shared settings enabled)
 
 ::: warning
 The original source directory is NOT deleted. Remove it manually after verifying everything works.
@@ -122,7 +123,7 @@ HTTP MCPs require OAuth — run `claude` in the target profile after adding, the
 
 ## `update [options]`
 
-Update Claude Code (and surface self-updates) without breaking the shell integration. The self-update is intentionally print-only — it shows the exact `npm install -g claude-account-switch@latest` command instead of overwriting itself mid-process.
+Update Claude Code without breaking the shell integration. `update --self` remains print-only, while the `claude` shell command can prompt for a `claude-account-switch` self-update once per day.
 
 ```bash
 npx claude-account-switch update            # check both, install Claude Code after confirm
@@ -147,6 +148,9 @@ Behavior highlights:
 - Blocks Claude Code install on Windows while `claude.exe` is running (avoids EBUSY)
 - Refreshes shell-integration templates after a successful install — the next terminal picks up the new binary
 - Warns if Claude Code's `bin` entry changes between versions (signals that templates may need attention)
+- Uses thin shell functions that delegate to the installed CLI, so future profile and update logic changes live in the npm package
+
+When shell integration is installed, running `claude` checks for a newer `claude-account-switch` version at most once every 24 hours. If a newer version exists, it asks whether to install it now and refreshes shell integration after the install succeeds. Set `CLAUDE_SWITCH_DISABLE_AUTO_UPDATE=1` to disable this prompt.
 
 ::: tip
 Use `--check` in CI to fail the job when an update is available — exit `1` is intended for this.

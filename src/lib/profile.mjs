@@ -8,6 +8,7 @@ import {
   RESERVED_NAMES, SHARED_FILES, SHARED_DIRS, PROFILE_FILES, PROFILE_DIRS,
 } from './constants.mjs';
 import { addProfileToMeta, removeProfileFromMeta, readMeta } from './config.mjs';
+import { rootStateFileForSource } from './claude-data.mjs';
 import { warn } from './ui.mjs';
 
 /**
@@ -134,6 +135,12 @@ export function migrateDir(sourceDir, profileName, shareSettings = true) {
     if (existsSync(src)) {
       copyFileSync(src, join(dir, f));
     }
+  }
+
+  const rootStateFile = rootStateFileForSource(sourceDir);
+  const targetStateFile = join(dir, '.claude.json');
+  if (rootStateFile && existsSync(rootStateFile) && !existsSync(targetStateFile)) {
+    copyFileSync(rootStateFile, targetStateFile);
   }
 
   // Copy profile-specific dirs

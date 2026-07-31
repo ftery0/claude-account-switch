@@ -1,19 +1,11 @@
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { color, box, success, warn } from '../lib/ui.mjs';
 import * as prompt from '../lib/prompt.mjs';
 import { readMeta, writeMeta } from '../lib/config.mjs';
 import { createProfile, validateProfileName, migrateDir } from '../lib/profile.mjs';
-import { PROFILES_DIR, HOME, IS_WINDOWS } from '../lib/constants.mjs';
+import { PROFILES_DIR, IS_WINDOWS } from '../lib/constants.mjs';
 import { installAllShells } from '../lib/shell.mjs';
-
-// Known existing profile directories to detect for migration
-const homeLabel = IS_WINDOWS ? '%USERPROFILE%' : '~';
-const KNOWN_DIRS = [
-  { path: join(HOME, '.claude'), label: `${homeLabel}/.claude` },
-  { path: join(HOME, '.claude-work'), label: `${homeLabel}/.claude-work` },
-  { path: join(HOME, '.claude-personal'), label: `${homeLabel}/.claude-personal` },
-];
+import { detectClaudeSources } from '../lib/claude-data.mjs';
 
 export async function init() {
   console.log();
@@ -73,7 +65,7 @@ export async function init() {
   console.log();
 
   // Step 5: Detect existing directories for migration
-  const existingDirs = KNOWN_DIRS.filter(d => existsSync(d.path) && existsSync(join(d.path, '.claude.json')));
+  const existingDirs = detectClaudeSources();
   const migrations = [];
 
   if (existingDirs.length > 0) {
@@ -83,7 +75,7 @@ export async function init() {
         { label: 'No, skip', value: 'skip' },
       ];
       const target = await prompt.select(
-        `Existing ${dir.label} detected. Migrate to a profile?`,
+        `Existing Claude Code data in ${dir.label} detected. Migrate to a profile?`,
         choices,
       );
       if (target !== 'skip') {

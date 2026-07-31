@@ -60,7 +60,7 @@ npx claude-account-switch init
 
   Share settings across profiles? (recommended) Yes
 
-  Existing ~/.claude detected. Migrate to a profile?
+  Existing Claude Code data in ~/.claude detected. Migrate to a profile?
   ❯ Yes, migrate to "work"
     Yes, migrate to "personal"
     No, skip

@@ -9,21 +9,19 @@ const EXEC_MODE = IS_WINDOWS ? undefined : { mode: 0o755 };
 const SH_FILE     = join(PROFILES_DIR, '.shell-integration.sh');
 const PS1_FILE    = join(PROFILES_DIR, '.shell-integration.ps1');
 const FISH_FILE   = join(PROFILES_DIR, '.shell-integration.fish');
-const PICKER_FILE = join(PROFILES_DIR, '.picker.mjs');
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = join(HERE, '..', 'shell-templates');
-const PICKER_SRC = join(HERE, 'picker-script.mjs');
 
 export function installShellIntegration(shell) {
   if (shell === 'powershell') {
     writeTemplate('integration.ps1', PS1_FILE);
     installPowerShellProfile();
   } else if (shell === 'fish') {
-    writePickerAndTemplate('integration.fish', FISH_FILE);
+    writeTemplate('integration.fish', FISH_FILE);
     installFishConfig();
   } else {
-    writePickerAndTemplate('integration.sh', SH_FILE);
+    writeTemplate('integration.sh', SH_FILE);
     installUnixRc(shell);
   }
 }
@@ -40,9 +38,9 @@ export function installAllShells() {
   const track = (name, isNew) => (isNew ? newlyInstalled : alreadyInstalled).push(name);
 
   // Generate all scripts upfront (idempotent — keeps them up-to-date)
-  writePickerAndTemplate('integration.sh', SH_FILE);
+  writeTemplate('integration.sh', SH_FILE);
   writeTemplate('integration.ps1', PS1_FILE);
-  writePickerAndTemplate('integration.fish', FISH_FILE);
+  writeTemplate('integration.fish', FISH_FILE);
 
   if (IS_WINDOWS) {
     track('PowerShell', installPowerShellProfile());
@@ -68,13 +66,6 @@ export function installAllShells() {
 function writeTemplate(templateName, targetFile) {
   const content = readFileSync(join(TEMPLATES_DIR, templateName), 'utf8');
   writeFileSync(targetFile, content, EXEC_MODE);
-}
-
-function writePickerAndTemplate(templateName, targetFile) {
-  if (!existsSync(PROFILES_DIR)) return;
-  const picker = readFileSync(PICKER_SRC, 'utf8');
-  writeFileSync(PICKER_FILE, picker, EXEC_MODE);
-  writeTemplate(templateName, targetFile);
 }
 
 // ── Per-shell RC installers ─────────────────────────────────────────────────

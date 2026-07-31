@@ -65,17 +65,18 @@ npx claude-account-switch use personal
 
 ## `migrate [name]`
 
-기존 `~/.claude` 데이터를 프로필로 마이그레이션합니다. 이름을 지정하지 않으면 소스 디렉토리와 대상 프로필을 선택하는 위자드가 안내합니다.
+기존 Claude Code 데이터를 프로필로 마이그레이션합니다. 이름을 지정하지 않으면 소스 디렉토리와 대상 프로필을 선택하는 위자드가 안내합니다.
 
 ```bash
 npx claude-account-switch migrate work
+npx claude-account-switch migrate work --from ~/.claude
 ```
 
-위자드가 일반적인 소스 디렉토리(`~/.claude`, `~/.claude-work`, `~/.claude-personal`)를 감지하거나, 사용자 지정 경로를 입력할 수 있습니다. 마이그레이션 대상:
+위자드가 일반적인 소스 디렉토리(`~/.claude`, `~/.claude-work`, `~/.claude-personal`)와 최신 Claude Code 파일(`~/.claude/.credentials.json`, `~/.claude.json`)을 감지하거나, 사용자 지정 경로를 입력할 수 있습니다. 마이그레이션 대상:
 
-- `.claude.json`, `settings.local.json` — 인증 및 로컬 설정
+- `.claude.json`, `.credentials.json`, `settings.local.json` — 인증 및 로컬 설정
 - `plugins/`, `projects/`, `plans/` — 프로필 데이터
-- `settings.json`, `commands/` — `_shared`로 복사 후 심링크 (공유 설정 활성화 시)
+- `settings.json`, `commands/`, `agents/` — `_shared`로 복사 후 심링크 (공유 설정 활성화 시)
 
 ::: warning
 원본 소스 디렉토리는 삭제되지 않습니다. 정상 동작 확인 후 수동으로 삭제하세요.
@@ -122,7 +123,7 @@ HTTP MCP는 OAuth 인증이 필요합니다 — 해당 프로필로 `claude` 실
 
 ## `update [옵션]`
 
-셸 통합을 깨뜨리지 않고 Claude Code를 업데이트합니다. 자체 업데이트는 의도적으로 **명령어 안내만 출력**합니다 (실행 중 프로세스 덮어쓰기 회피).
+셸 통합을 깨뜨리지 않고 Claude Code를 업데이트합니다. `update --self`는 명령어 안내만 출력하고, `claude` 셸 명령은 하루 1회 `claude-account-switch` 자체 업데이트 여부를 물어볼 수 있습니다.
 
 ```bash
 npx claude-account-switch update            # 두 패키지 체크 후 confirm 시 Claude Code 설치
@@ -147,6 +148,9 @@ npx claude-account-switch update --claude-code --yes  # 비대화형 (CI)
 - Windows에서 `claude.exe` 실행 중이면 EBUSY 방지를 위해 차단
 - 설치 성공 후 셸 통합 템플릿 자동 갱신 → 새 터미널이 새 바이너리 사용
 - 버전 간 `bin` entry 변경 감지 시 경고 (템플릿 갱신 필요 신호)
+- 셸 함수는 설치된 CLI에 위임하는 얇은 launcher라서 이후 프로필/업데이트 로직 변경은 npm 패키지 쪽에서 반영
+
+셸 통합이 설치되어 있으면 `claude` 실행 시 최대 하루 1번 새 `claude-account-switch` 버전을 확인합니다. 새 버전이 있으면 지금 설치할지 묻고, 설치 성공 후 셸 통합을 갱신합니다. 이 프롬프트를 끄려면 `CLAUDE_SWITCH_DISABLE_AUTO_UPDATE=1`을 설정하세요.
 
 ::: tip
 CI에서는 `--check`로 업데이트 있을 때 잡을 실패시키세요 — exit `1`이 그 용도입니다.

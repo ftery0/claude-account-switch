@@ -15,7 +15,6 @@ description: Architecture and design of claude-account-switch. Profile directory
 ├── .shell-integration.sh      ← bash/zsh integration script
 ├── .shell-integration.fish    ← fish integration script
 ├── .shell-integration.ps1     ← PowerShell integration script
-├── .picker.mjs                ← Arrow-key picker script
 ├── _shared/
 │   ├── settings.json          ← Shared settings (original)
 │   └── commands/               ← Shared custom commands
@@ -50,7 +49,7 @@ Changes to shared settings automatically apply to all profiles.
 
 Each profile independently manages:
 
-- **`.claude.json`** — OAuth credentials
+- **`.claude.json` / `.credentials.json`** — OAuth credentials and Claude Code state
 - **`settings.local.json`** — Local settings
 - **`plugins/`** — Installed plugins
 - **`projects/`** — Project-specific settings

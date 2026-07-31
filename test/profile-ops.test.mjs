@@ -257,6 +257,7 @@ describe('migrateDir', async () => {
     mkdirSync(sourceDir, { recursive: true });
     // Create profile-specific files
     writeFileSync(join(sourceDir, '.claude.json'), '{"oauth":"token123"}');
+    writeFileSync(join(sourceDir, '.credentials.json'), '{"credentials":"token456"}');
     writeFileSync(join(sourceDir, 'settings.local.json'), '{"local":true}');
     // Create profile-specific dirs with content
     for (const d of PROFILE_DIRS) {
@@ -267,6 +268,8 @@ describe('migrateDir', async () => {
     writeFileSync(join(sourceDir, 'settings.json'), '{"theme":"monokai"}');
     mkdirSync(join(sourceDir, 'commands'), { recursive: true });
     writeFileSync(join(sourceDir, 'commands', 'custom.md'), '# custom command');
+    mkdirSync(join(sourceDir, 'agents'), { recursive: true });
+    writeFileSync(join(sourceDir, 'agents', 'reviewer.md'), '# reviewer agent');
   });
 
   after(() => {
@@ -289,6 +292,11 @@ describe('migrateDir', async () => {
     assert.equal(content, '{"oauth":"token123"}');
   });
 
+  it('copies modern .credentials.json with correct content', () => {
+    const content = readFileSync(join(profileDir(TEST_PROFILE), '.credentials.json'), 'utf8');
+    assert.equal(content, '{"credentials":"token456"}');
+  });
+
   it('copies profile-specific directories recursively', () => {
     const dir = profileDir(TEST_PROFILE);
     for (const d of PROFILE_DIRS) {
@@ -306,7 +314,25 @@ describe('migrateDir', async () => {
 
   it('copies shared directories to _shared', () => {
     const sharedCommands = join(SHARED_DIR, 'commands', 'custom.md');
+    const sharedAgents = join(SHARED_DIR, 'agents', 'reviewer.md');
     assert.ok(existsSync(sharedCommands));
+    assert.ok(existsSync(sharedAgents));
+  });
+
+  it('copies root ~/.claude.json into the target profile when source lacks .claude.json', () => {
+    const home = join(tmpdir(), `claude-root-state-${Date.now()}`);
+    const src = join(home, '.claude');
+    const profileName = `zzroot${Date.now()}`;
+    mkdirSync(src, { recursive: true });
+    writeFileSync(join(home, '.claude.json'), '{"rootState":true}');
+
+    migrateDir(src, profileName, false);
+
+    const content = readFileSync(join(profileDir(profileName), '.claude.json'), 'utf8');
+    assert.equal(content, '{"rootState":true}');
+
+    rmSync(join(PROFILES_DIR, profileName), { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
   });
 
   it('creates links for shared files in profile', () => {

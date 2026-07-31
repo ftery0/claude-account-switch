@@ -15,7 +15,6 @@ description: claude-account-switch의 아키텍처와 설계. 프로필 디렉�
 ├── .shell-integration.sh      ← bash/zsh 통합 스크립트
 ├── .shell-integration.fish    ← fish 통합 스크립트
 ├── .shell-integration.ps1     ← PowerShell 통합 스크립트
-├── .picker.mjs                ← 화살표 키 선택기 스크립트
 ├── _shared/
 │   ├── settings.json          ← 공통 설정 (원본)
 │   └── commands/               ← 공통 커스텀 명령어
@@ -50,7 +49,7 @@ description: claude-account-switch의 아키텍처와 설계. 프로필 디렉�
 
 각 프로필은 독립적으로 관리합니다:
 
-- **`.claude.json`** — OAuth 인증 정보
+- **`.claude.json` / `.credentials.json`** — OAuth 인증 정보 및 Claude Code 상태
 - **`settings.local.json`** — 로컬 설정
 - **`plugins/`** — 설치된 플러그인
 - **`projects/`** — 프로젝트별 설정

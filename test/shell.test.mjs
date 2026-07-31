@@ -12,7 +12,6 @@ describe('shell script generation', async () => {
   const PS1_FILE  = join(PROFILES_DIR, '.shell-integration.ps1');
   const FISH_FILE = join(PROFILES_DIR, '.shell-integration.fish');
 
-  // Save/restore rc files that installShellIntegration modifies
   const HOME = homedir();
   const rcFiles = [
     join(HOME, '.bashrc'),
@@ -25,7 +24,6 @@ describe('shell script generation', async () => {
 
   before(() => {
     mkdirSync(PROFILES_DIR, { recursive: true });
-    // Backup rc files
     for (const rc of rcFiles) {
       if (existsSync(rc)) {
         const bk = rc + '.shell-test-backup';
@@ -36,12 +34,10 @@ describe('shell script generation', async () => {
   });
 
   after(() => {
-    // Restore rc files
     for (const [rc, bk] of rcBackups) {
       copyFileSync(bk, rc);
       unlinkSync(bk);
     }
-    // Remove rc files that were created by the test (didn't exist before)
     for (const rc of rcFiles) {
       if (!rcBackups.has(rc) && existsSync(rc)) {
         unlinkSync(rc);
@@ -49,14 +45,10 @@ describe('shell script generation', async () => {
     }
   });
 
-  // ─── Unix shell script content ───────────────────────────────────────────
-
   describe('Unix (bash/zsh) script', () => {
     before(() => {
       installShellIntegration('bash');
     });
-
-    after(() => {});  // cleanup handled by parent after
 
     it('creates .shell-integration.sh', () => {
       assert.ok(existsSync(SH_FILE));
@@ -67,100 +59,29 @@ describe('shell script generation', async () => {
       assert.ok(content.startsWith('#!/bin/sh'));
     });
 
-    it('defines __claude_switch_active function', () => {
+    it('defines thin command shims', () => {
       const content = readFileSync(SH_FILE, 'utf8');
-      assert.ok(content.includes('__claude_switch_active()'));
-    });
-
-    it('defines __claude_switch_profiles function', () => {
-      const content = readFileSync(SH_FILE, 'utf8');
-      assert.ok(content.includes('__claude_switch_profiles()'));
-    });
-
-    it('defines claude function', () => {
-      const content = readFileSync(SH_FILE, 'utf8');
+      assert.ok(content.includes('__claude_switch_cli()'));
       assert.ok(content.includes('claude()'));
-    });
-
-    it('defines cpf function', () => {
-      const content = readFileSync(SH_FILE, 'utf8');
       assert.ok(content.includes('cpf()'));
-    });
-
-    it('defines claude-pick function', () => {
-      const content = readFileSync(SH_FILE, 'utf8');
       assert.ok(content.includes('claude-pick()'));
     });
 
-    it('uses CLAUDE_CONFIG_DIR env var to launch claude', () => {
+    it('delegates runtime behavior to the installed CLI', () => {
       const content = readFileSync(SH_FILE, 'utf8');
-      assert.ok(content.includes('CLAUDE_CONFIG_DIR='));
+      assert.ok(content.includes('claude-account-switch "$@"'));
+      assert.ok(content.includes('__claude_switch_cli shell launch "$@"'));
+      assert.ok(content.includes('__claude_switch_cli shell use "$@"'));
+      assert.ok(content.includes('__claude_switch_cli shell pick'));
     });
 
-    it('caches real claude binary before defining function (avoids recursion)', () => {
+    it('does not cache or launch Claude directly', () => {
       const content = readFileSync(SH_FILE, 'utf8');
-      const cacheIdx = content.indexOf('__CLAUDE_SWITCH_REAL_BIN="$(command -v claude');
-      const funcIdx = content.indexOf('claude()');
-      assert.ok(cacheIdx > -1, 'should cache claude binary path');
-      assert.ok(funcIdx > -1, 'should define claude function');
-      assert.ok(cacheIdx < funcIdx, 'cache must come before function definition');
-    });
-
-    it('does NOT use xargs (portability)', () => {
-      const content = readFileSync(SH_FILE, 'utf8');
-      assert.ok(!content.includes('xargs'));
-    });
-
-    it('uses glob loop for profile listing instead of ls|xargs', () => {
-      const content = readFileSync(SH_FILE, 'utf8');
-      assert.ok(content.includes('for _csd in "$CLAUDE_PROFILES_DIR"/*/'));
-    });
-
-    it('uses here-doc for while loop (avoids subshell)', () => {
-      const content = readFileSync(SH_FILE, 'utf8');
-      assert.ok(content.includes('<<_PROFILES_LIST_'));
-    });
-
-    it('sed patterns have properly escaped quotes inside double-quoted strings', () => {
-      const content = readFileSync(SH_FILE, 'utf8');
-      // Check that [^"]*  inside sed double-quoted commands uses escaped quote [^\"]
-      // The pattern should NOT have unescaped " inside [^...]
-      const sedLines = content.split('\n').filter(l => l.includes('sed '));
-      for (const line of sedLines) {
-        // If the line has a character class [^...], the " inside should be escaped
-        if (line.includes('[^')) {
-          // Ensure it's [^\"] not [^"]
-          assert.ok(!line.match(/\[(?:\^)?[^\]]*(?<!\\)"[^\]]*\]/),
-            `Unescaped quote in sed character class: ${line.trim()}`);
-        }
-      }
-    });
-
-    it('uses $HOME for paths (not hardcoded ~)', () => {
-      const content = readFileSync(SH_FILE, 'utf8');
-      assert.ok(content.includes('CLAUDE_PROFILES_DIR="$HOME/.claude-profiles"'));
-    });
-
-    it('uses mktemp for atomic file updates in cpf', () => {
-      const content = readFileSync(SH_FILE, 'utf8');
-      assert.ok(content.includes('mktemp'));
-    });
-
-    it('fallback chain references bin/claude.exe before cli.js', () => {
-      const content = readFileSync(SH_FILE, 'utf8');
-      const exeIdx = content.indexOf('bin/claude.exe');
-      const cliIdx = content.indexOf('cli.js');
-      assert.ok(exeIdx > -1, 'should reference bin/claude.exe');
-      assert.ok(cliIdx === -1 || exeIdx < cliIdx, 'bin/claude.exe must come before legacy cli.js');
-    });
-
-    it('wraps resolved .js binary with node', () => {
-      const content = readFileSync(SH_FILE, 'utf8');
-      assert.ok(/\*\.js\)[^)]*node "\$_bin"/.test(content), 'should route .js fallback through node');
+      assert.ok(!content.includes('__CLAUDE_SWITCH_REAL_BIN'));
+      assert.ok(!content.includes('CLAUDE_CONFIG_DIR='));
+      assert.ok(!content.includes('@anthropic-ai/claude-code'));
     });
   });
-
-  // ─── PowerShell script content ───────────────────────────────────────────
 
   describe('PowerShell script', () => {
     before(() => {
@@ -171,64 +92,20 @@ describe('shell script generation', async () => {
       assert.ok(existsSync(PS1_FILE));
     });
 
-    it('caches claude binary path before defining function', () => {
+    it('delegates runtime behavior to the installed CLI', () => {
       const content = readFileSync(PS1_FILE, 'utf8');
-      // Must find the binary BEFORE the function claude { } is defined
-      const cacheIdx = content.indexOf('Get-Command claude -CommandType Application');
-      const funcIdx = content.indexOf('function claude {');
-      assert.ok(cacheIdx > -1, 'should cache claude binary');
-      assert.ok(funcIdx > -1, 'should define claude function');
-      assert.ok(cacheIdx < funcIdx, 'cache must come before function definition');
+      assert.ok(content.includes('Get-Command claude-account-switch'));
+      assert.ok(content.includes('__claude_switch_cli shell launch @args'));
+      assert.ok(content.includes('__claude_switch_cli shell use @args'));
+      assert.ok(content.includes('__claude_switch_cli shell pick'));
     });
 
-    it('uses $script:__claude_bin to call real binary', () => {
+    it('does not launch Claude directly', () => {
       const content = readFileSync(PS1_FILE, 'utf8');
-      assert.ok(content.includes('$script:__claude_bin'));
-      assert.ok(content.includes('& $script:__claude_bin'));
-    });
-
-    it('uses ConvertFrom-Json for reading meta', () => {
-      const content = readFileSync(PS1_FILE, 'utf8');
-      assert.ok(content.includes('ConvertFrom-Json'));
-    });
-
-    it('writes meta without BOM (uses [IO.File]::WriteAllText)', () => {
-      const content = readFileSync(PS1_FILE, 'utf8');
-      assert.ok(content.includes('[IO.File]::WriteAllText'));
-      // Should NOT use Set-Content -Encoding UTF8 (adds BOM in PS5.1)
-      assert.ok(!content.includes('Set-Content') || !content.includes('-Encoding UTF8'),
-        'Should not use Set-Content -Encoding UTF8 (BOM issue in PS5.1)');
-    });
-
-    it('cleans up CLAUDE_CONFIG_DIR with try/finally', () => {
-      const content = readFileSync(PS1_FILE, 'utf8');
-      assert.ok(content.includes('try {'));
-      assert.ok(content.includes('finally {'));
-      assert.ok(content.includes('Remove-Item Env:CLAUDE_CONFIG_DIR'));
-    });
-
-    it('defines cpf function with param', () => {
-      const content = readFileSync(PS1_FILE, 'utf8');
-      assert.ok(content.includes('function cpf'));
-    });
-
-    it('defines claude-pick function', () => {
-      const content = readFileSync(PS1_FILE, 'utf8');
-      assert.ok(content.includes('function claude-pick'));
-    });
-
-    it('uses $env:USERPROFILE for home path (Windows)', () => {
-      const content = readFileSync(PS1_FILE, 'utf8');
-      assert.ok(content.includes('$env:USERPROFILE'));
-    });
-
-    it('handles single-profile shortcut (no picker)', () => {
-      const content = readFileSync(PS1_FILE, 'utf8');
-      assert.ok(content.includes('$profiles.Count -eq 1'));
+      assert.ok(!content.includes('$env:CLAUDE_CONFIG_DIR'));
+      assert.ok(!content.includes('Get-Command claude -CommandType Application'));
     });
   });
-
-  // ─── Fish script content ─────────────────────────────────────────────────
 
   describe('Fish script', () => {
     before(() => {
@@ -239,68 +116,23 @@ describe('shell script generation', async () => {
       assert.ok(existsSync(FISH_FILE));
     });
 
-    it('uses fish syntax (function/end instead of {/})', () => {
+    it('uses fish syntax and delegates to the installed CLI', () => {
       const content = readFileSync(FISH_FILE, 'utf8');
       assert.ok(content.includes('function claude'));
-      assert.ok(content.includes('end'));
+      assert.ok(content.includes('function cpf'));
+      assert.ok(content.includes('function claude-pick'));
+      assert.ok(content.includes('__claude_switch_cli shell launch $argv'));
+      assert.ok(content.includes('__claude_switch_cli shell use $argv'));
+      assert.ok(content.includes('__claude_switch_cli shell pick'));
     });
 
-    it('uses set_color for terminal colors', () => {
+    it('does not launch Claude directly', () => {
       const content = readFileSync(FISH_FILE, 'utf8');
-      assert.ok(content.includes('set_color'));
-    });
-
-    it('uses node with process.argv for safe path passing', () => {
-      const content = readFileSync(FISH_FILE, 'utf8');
-      assert.ok(content.includes('process.argv[1]'));
-      assert.ok(content.includes('process.argv[2]'));
-    });
-
-    it('does not interpolate paths into JS strings (injection safe)', () => {
-      const content = readFileSync(FISH_FILE, 'utf8');
-      // The cpf function should NOT use '$__CLAUDE_META_FILE' inside JS code
-      // It should use process.argv instead
-      const cpfSection = content.split('function cpf')[1]?.split('end')[0] || '';
-      const nodeLines = cpfSection.split('\n').filter(l => l.includes('node -e'));
-      for (const line of nodeLines) {
-        // Inside the JS code (single-quoted), there should be no $__CLAUDE
-        const jsCode = line.match(/'([^']*)'/)?.[1] || '';
-        assert.ok(!jsCode.includes('$__CLAUDE'),
-          'Should not interpolate fish vars into JS code');
-      }
-    });
-
-    it('caches real claude binary before defining function (avoids recursion)', () => {
-      const content = readFileSync(FISH_FILE, 'utf8');
-      const cacheIdx = content.indexOf('__CLAUDE_SWITCH_REAL_BIN (command -v claude');
-      const funcIdx = content.indexOf('function claude');
-      assert.ok(cacheIdx > -1, 'should cache claude binary path');
-      assert.ok(funcIdx > -1, 'should define claude function');
-      assert.ok(cacheIdx < funcIdx, 'cache must come before function definition');
-    });
-
-    it('sets and unsets CLAUDE_CONFIG_DIR', () => {
-      const content = readFileSync(FISH_FILE, 'utf8');
-      assert.ok(content.includes('set -x CLAUDE_CONFIG_DIR'));
-      assert.ok(content.includes('set -e CLAUDE_CONFIG_DIR'));
-    });
-
-    it('fallback chain references bin/claude.exe before cli.js', () => {
-      const content = readFileSync(FISH_FILE, 'utf8');
-      const exeIdx = content.indexOf('bin/claude.exe');
-      const cliIdx = content.indexOf('cli.js');
-      assert.ok(exeIdx > -1, 'should reference bin/claude.exe');
-      assert.ok(cliIdx === -1 || exeIdx < cliIdx, 'bin/claude.exe must come before legacy cli.js');
-    });
-
-    it('wraps resolved .js binary with node', () => {
-      const content = readFileSync(FISH_FILE, 'utf8');
-      assert.ok(/string match -q "\*\.js"[\s\S]*?node "\$_bin"/.test(content),
-        'should route .js fallback through node');
+      assert.ok(!content.includes('__CLAUDE_SWITCH_REAL_BIN'));
+      assert.ok(!content.includes('CLAUDE_CONFIG_DIR'));
+      assert.ok(!content.includes('@anthropic-ai/claude-code'));
     });
   });
-
-  // ─── Script routing ──────────────────────────────────────────────────────
 
   describe('installShellIntegration routing', () => {
     it('appends source line to an existing rc file with a trailing newline', () => {

@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { error, color, success } from './lib/ui.mjs';
 import { installAllShells } from './lib/shell.mjs';
+import { hasExistingClaudeSetup } from './lib/claude-data.mjs';
+import { readMeta } from './lib/config.mjs';
+import * as prompt from './lib/prompt.mjs';
 
 const PKG_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
 const pkg = JSON.parse(readFileSync(PKG_PATH, 'utf8'));
@@ -15,12 +18,14 @@ const COMMANDS = {
   list:            () => import('./commands/list.mjs').then(m => m.list()),
   use:             (name) => import('./commands/use.mjs').then(m => m.use(name)),
   'install-shell': () => import('./commands/install-shell.mjs').then(m => m.installShell()),
-  migrate:         (name) => import('./commands/migrate.mjs').then(m => m.migrate(name)),
+  migrate:         (_, args) => import('./commands/migrate.mjs').then(m => m.migrate(args)),
   mcp:             (_, args) => import('./commands/mcp/index.mjs').then(m => m.mcp(args)),
   update:          (_, args) => import('./commands/update.mjs').then(m => m.update(args)),
+  shell:           (_, args) => import('./commands/shell.mjs').then(m => m.shell(args)),
 };
 
-const RAW_ARGV_COMMANDS = new Set(['mcp', 'update']);
+const RAW_ARGV_COMMANDS = new Set(['mcp', 'update', 'migrate', 'shell']);
+const SKIP_POST_RUN_SHELL_REFRESH = new Set(['shell']);
 
 function showHelp() {
   console.log(`
@@ -35,7 +40,7 @@ function showHelp() {
     remove <name>     Remove a profile
     list              List all profiles
     use <name>        Switch active profile
-    migrate [name]    Migrate existing ~/.claude data into a profile
+    migrate [name]    Migrate existing Claude Code data into a profile
     install-shell     Install shell integration
     mcp [sub]         Manage MCP servers interactively
     update [opts]     Update Claude Code (and check for self-updates)
@@ -54,7 +59,20 @@ export async function run(argv) {
     return;
   }
 
-  if (argv.length === 0 || argv.includes('--help') || argv.includes('-h')) {
+  if (argv.length === 0) {
+    if (process.stdin.isTTY && readMeta().profiles.length === 0 && hasExistingClaudeSetup()) {
+      const proceed = await prompt.confirm('Existing Claude Code setup detected. Initialize profiles now?', true);
+      if (proceed) {
+        await COMMANDS.init();
+        return;
+      }
+      console.log();
+    }
+    showHelp();
+    return;
+  }
+
+  if (argv.includes('--help') || argv.includes('-h')) {
     showHelp();
     return;
   }
@@ -79,7 +97,7 @@ export async function run(argv) {
     process.exit(1);
   }
 
-  // Some commands (mcp, update) own their own parseArgs and need raw subargs
+  // Some commands own their own parseArgs and need raw subargs
   const rawSubArgs = argv.slice(argv.indexOf(command) + 1);
 
   try {
@@ -90,6 +108,8 @@ export async function run(argv) {
   }
 
   // Auto-detect new shells and install integration silently
+  if (SKIP_POST_RUN_SHELL_REFRESH.has(command)) return;
+
   const { newlyInstalled } = installAllShells();
   if (newlyInstalled.length > 0) {
     console.log();

@@ -15,13 +15,12 @@ export const RESERVED_NAMES = ['_shared', 'default'];
 
 // Files/dirs that are shared across profiles (symlinked)
 export const SHARED_FILES = ['settings.json'];
-export const SHARED_DIRS = ['commands'];
+export const SHARED_DIRS = ['commands', 'agents'];
 
 // Files/dirs that are profile-specific (copied independently)
-export const PROFILE_FILES = ['.claude.json', 'settings.local.json'];
+export const PROFILE_FILES = ['.claude.json', '.credentials.json', 'settings.local.json'];
 export const PROFILE_DIRS = ['plugins', 'projects', 'plans'];
 
 // npm package names used by the `update` command
 export const CLAUDE_CODE_PKG = '@anthropic-ai/claude-code';
 export const SELF_PKG = 'claude-account-switch';
-

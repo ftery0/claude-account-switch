@@ -17,6 +17,7 @@ npx claude-account-switch init
 ```
 
 인터랙티브 위자드가 프로필 생성, 기존 설정 마이그레이션, 감지된 모든 셸에 셸 통합 자동 설치를 안내합니다.
+명령 없이 `npx claude-account-switch`를 실행했을 때 기존 Claude Code 데이터가 감지되면 `init`을 시작할지 묻습니다.
 
 ```
   ╭──────────────────────────────────────╮
@@ -35,7 +36,7 @@ npx claude-account-switch init
 
   Share settings across profiles? (recommended) Yes
 
-  Existing ~/.claude detected. Migrate to a profile?
+  Existing Claude Code data in ~/.claude detected. Migrate to a profile?
   ❯ Yes, migrate to "work"
     Yes, migrate to "personal"
     No, skip
@@ -75,7 +76,7 @@ npm i -g claude-account-switch
 | `remove <name>` | 프로필 삭제 |
 | `list` | 프로필 목록 |
 | `use <name>` | 활성 프로필 전환 |
-| `migrate [name]` | 기존 `~/.claude` 데이터를 프로필로 마이그레이션 |
+| `migrate [name]` | 기존 Claude Code 데이터를 프로필로 마이그레이션 |
 | `install-shell` | 셸 통합 설치 |
 | `mcp [서브커맨드]` | MCP 서버 인터랙티브 관리 |
 | `update [옵션]` | Claude Code 업데이트 + 셸 통합 자동 갱신 |
@@ -157,6 +158,7 @@ claude-account-switch update --claude-code --yes  # Claude Code 비대화형 업
 - `claude-account-switch`가 `npm link`로 설치된 경우 자체 업데이트 거부
 - 설치 후 셸 통합 자동 갱신 → 새 터미널에서 새 바이너리 사용
 - Windows에서 `claude.exe` 실행 중이면 파일 잠금 방지를 위해 설치 차단
+- `claude` 셸 명령 실행 시 하루 1회 `claude-account-switch` 자체 업데이트 여부 확인
 
 ```
   Package                          Installed   Latest    Action
@@ -177,6 +179,10 @@ claude-account-switch update --claude-code --yes  # Claude Code 비대화형 업
 | `cpf <name>` | 빠른 프로필 전환 |
 | `claude-pick` | 인터랙티브 프로필 선택기 |
 
+셸 함수는 설치된 `claude-account-switch` CLI에 위임하는 얇은 launcher입니다. 프로필 선택, Claude 실행 파일 탐색, 업데이트 확인 로직이 shell rc 파일에 고정되지 않고 npm 패키지 쪽에서 갱신됩니다.
+
+`claude`를 실행하면 최대 하루 1번 새 `claude-account-switch` 버전을 확인하고, 업데이트가 있으면 바로 업데이트할지 묻습니다. 이 프롬프트를 끄려면 `CLAUDE_SWITCH_DISABLE_AUTO_UPDATE=1`을 설정하세요.
+
 **지원 셸:**
 
 | 셸 | 플랫폼 | 설정 파일 |
@@ -194,7 +200,6 @@ claude-account-switch update --claude-code --yes  # Claude Code 비대화형 업
 ├── .shell-integration.sh      ← bash/zsh 통합 스크립트
 ├── .shell-integration.fish    ← fish 통합 스크립트
 ├── .shell-integration.ps1     ← PowerShell 통합 스크립트
-├── .picker.mjs                ← 화살표 키 선택기 스크립트
 ├── _shared/
 │   ├── settings.json          ← 공통 설정 (원본)
 │   └── commands/               ← 공통 커스텀 명령어
@@ -219,7 +224,7 @@ claude-account-switch update --claude-code --yes  # Claude Code 비대화형 업
 - **공유 파일** (`settings.json`, `commands/`)은 `_shared/`에 원본 저장, 각 프로필에 링크
   - macOS/Linux: 심볼릭 링크
   - Windows: 먼저 심링크 생성을 시도하고, 실패 시(개발자 모드 미활성) 복사. 디렉토리는 항상 junction 사용.
-- **프로필별 파일** (`.claude.json`, `settings.local.json`, `plugins/`, `projects/`, `plans/`)은 독립 보관
+- **프로필별 파일** (`.claude.json`, `.credentials.json`, `settings.local.json`, `plugins/`, `projects/`, `plans/`)은 독립 보관
 - **임시 파일** (`cache/`, `sessions/`, `history.jsonl` 등)은 Claude Code가 자동 생성, 관리하지 않음
 
 ## 프로필 이름 규칙

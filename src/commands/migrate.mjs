@@ -1,12 +1,22 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseArgs } from 'node:util';
 import { color, success, warn, error } from '../lib/ui.mjs';
 import * as prompt from '../lib/prompt.mjs';
 import { readMeta } from '../lib/config.mjs';
 import { migrateDir, profileExists, profileDir, validateProfileName } from '../lib/profile.mjs';
-import { HOME, DEFAULT_CLAUDE_DIR, IS_WINDOWS } from '../lib/constants.mjs';
+import { HOME, IS_WINDOWS } from '../lib/constants.mjs';
+import { detectClaudeSources, knownClaudeSources } from '../lib/claude-data.mjs';
 
-export async function migrate(profileName) {
+export async function migrate(argv = []) {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: {
+      from: { type: 'string' },
+    },
+  });
+  const profileName = positionals[0];
   const meta = readMeta();
 
   if (meta.profiles.length === 0) {
@@ -16,14 +26,14 @@ export async function migrate(profileName) {
 
   // Pick source directory
   const h = IS_WINDOWS ? '%USERPROFILE%' : '~';
+  const detectedSources = detectClaudeSources();
+  const fallbackSources = knownClaudeSources({ home: HOME }).filter(s => existsSync(s.path));
   const commonSources = [
-    { label: `${h}/.claude  (default Claude Code directory)`, value: DEFAULT_CLAUDE_DIR },
-    { label: `${h}/.claude-work`, value: join(HOME, '.claude-work') },
-    { label: `${h}/.claude-personal`, value: join(HOME, '.claude-personal') },
+    ...(detectedSources.length > 0 ? detectedSources : fallbackSources),
     { label: 'Enter a custom path', value: '__custom__' },
-  ].filter(s => s.value === '__custom__' || existsSync(s.value));
+  ].map(s => ({ label: s.label, value: s.path ?? s.value }));
 
-  if (commonSources.length === 1) {
+  if (!values.from && commonSources.length === 1) {
     // Only custom option left — no known dirs found
     error(`No existing Claude directories found (checked ${h}/.claude, ${h}/.claude-work, ${h}/.claude-personal).`);
     console.log(`  Specify a path manually with: ${color.cyan('claude-account-switch migrate <profile> --from <path>')}`);
@@ -31,7 +41,7 @@ export async function migrate(profileName) {
   }
 
   console.log();
-  const sourceChoice = await prompt.select('Which directory do you want to migrate from?', commonSources);
+  const sourceChoice = values.from || await prompt.select('Which directory do you want to migrate from?', commonSources);
 
   let sourceDir = sourceChoice;
   if (sourceChoice === '__custom__') {
@@ -74,8 +84,13 @@ export async function migrate(profileName) {
 
   // Warn if target profile already has auth data — migration would overwrite it
   const targetAuthFile = join(profileDir(targetProfile), '.claude.json');
+  const targetCredentialsFile = join(profileDir(targetProfile), '.credentials.json');
   if (existsSync(targetAuthFile)) {
     warn(`Profile "${targetProfile}" already has credentials (.claude.json).`);
+    warn('Migrating will overwrite existing profile data.');
+  }
+  if (existsSync(targetCredentialsFile)) {
+    warn(`Profile "${targetProfile}" already has credentials (.credentials.json).`);
     warn('Migrating will overwrite existing profile data.');
   }
 
@@ -94,10 +109,10 @@ export async function migrate(profileName) {
   warn(`Original ${sourceDir} was NOT deleted. Once you verify everything works, you can remove it manually.`);
   console.log();
   console.log(`  ${color.bold('What was migrated:')}`);
-  console.log(`    • .claude.json, settings.local.json  (auth & local settings)`);
-  console.log(`    • plugins/, projects/, plans/         (profile data)`);
+  console.log(`    • .claude.json, .credentials.json, settings.local.json  (auth & local settings)`);
+  console.log(`    • plugins/, projects/, plans/                         (profile data)`);
   if (meta.shareSettings) {
-    console.log(`    • settings.json, commands/            (copied to _shared, symlinked)`);
+    console.log(`    • settings.json, commands/, agents/                   (copied to _shared, symlinked)`);
   }
   console.log();
 }
