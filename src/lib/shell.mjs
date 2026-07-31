@@ -110,7 +110,7 @@ function addSourceLine(rcFile, sourceLine, marker) {
     if (content.includes(marker)) return false;
     const cleaned = content.split('\n').filter(l => !l.includes(marker));
     cleaned.push('', '# Claude Switch - multi-account manager', sourceLine);
-    writeFileSync(rcFile, cleaned.join('\n'));
+    writeFileSync(rcFile, `${cleaned.join('\n')}\n`);
   } else {
     writeFileSync(rcFile, `\n# Claude Switch - multi-account manager\n${sourceLine}\n`);
   }
