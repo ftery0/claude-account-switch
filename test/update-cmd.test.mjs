@@ -2,11 +2,21 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI = join(__dirname, '..', 'bin', 'cli.mjs');
+
+function installFakeNativeClaude(version = '1.0.0') {
+  const bin = join(homedir(), '.local', 'bin', 'claude');
+  mkdirSync(dirname(bin), { recursive: true });
+  writeFileSync(bin, `#!/bin/sh\necho "${version} (Claude Code)"\n`);
+  chmodSync(bin, 0o755);
+  return bin;
+}
 
 // In-process mock registry: returns hardcoded latest versions
 function startMockRegistry({ self, claude }) {
@@ -49,6 +59,7 @@ describe('update --check (with mock registry)', () => {
 
   before(async () => {
     // Returns a very high version so it always reports "update available"
+    installFakeNativeClaude('1.0.0');
     ({ server, url } = await startMockRegistry({ self: '99.0.0', claude: '99.0.0' }));
   });
 
@@ -81,6 +92,7 @@ describe('update --check (no updates)', () => {
 
   before(async () => {
     // Returns a very low version so installed is always >= latest → up to date
+    installFakeNativeClaude('1.0.0');
     ({ server, url } = await startMockRegistry({ self: '0.0.1', claude: '0.0.1' }));
   });
 

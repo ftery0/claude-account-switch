@@ -1,11 +1,11 @@
 import { parseArgs } from 'node:util';
-import { color, success, warn, error, info, sym } from '../lib/ui.mjs';
+import { color, success, warn, error, info } from '../lib/ui.mjs';
 import * as prompt from '../lib/prompt.mjs';
 import { installAllShells } from '../lib/shell.mjs';
 import { CLAUDE_CODE_PKG, SELF_PKG, IS_WINDOWS } from '../lib/constants.mjs';
 import {
   computeUpdatePlan, buildInstallCommand, runInstall,
-  getInstalledBinMap, compareSemver,
+  buildNativeClaudeUpdateCommand, getInstalledBinMap,
 } from '../lib/updater.mjs';
 
 export async function update(argv = []) {
@@ -43,7 +43,7 @@ export async function update(argv = []) {
     const anyUpdate = (plan.self?.hasUpdate) || (plan.claude?.hasUpdate);
     if (!anyUpdate) {
       console.log();
-      info('All up to date.');
+      info('All installed packages are up to date.');
     } else {
       console.log();
       info(`Run ${color.cyan('claude-account-switch update')} to install.`);
@@ -83,7 +83,10 @@ export async function update(argv = []) {
       process.exit(0);
     }
 
-    const { cmd, args, displayCmd } = buildInstallCommand(plan.claude.pm, CLAUDE_CODE_PKG);
+    const command = plan.claude.installMethod === 'native'
+      ? buildNativeClaudeUpdateCommand(plan.claude.path)
+      : buildInstallCommand(plan.claude.pm, CLAUDE_CODE_PKG);
+    const { cmd, args, displayCmd } = command;
     console.log();
     info(`→ ${displayCmd}`);
     const code = await runInstall({ cmd, args });
@@ -152,11 +155,11 @@ function rowFor(entry) {
   } else if (!entry.latest) {
     action = color.red('error');
   } else if (!entry.installed) {
-    action = color.cyan(`install (via ${entry.pm})`);
+    action = color.dim('not installed');
   } else if (entry.hasUpdate) {
     action = entry.pkg === SELF_PKG
       ? color.yellow('manual (see below)')
-      : color.cyan(`update via ${entry.pm}`);
+      : color.cyan(entry.installMethod === 'native' ? 'update via claude' : `update via ${entry.pm}`);
   } else {
     action = color.dim('up to date');
   }

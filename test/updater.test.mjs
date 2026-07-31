@@ -7,7 +7,8 @@ import { join } from 'node:path';
 const mod = await import('../src/lib/updater.mjs');
 const {
   parseSemver, compareSemver, buildInstallCommand, classifyPathToPm,
-  fetchLatestVersion, computeUpdatePlan,
+  fetchLatestVersion, computeUpdatePlan, parseClaudeVersionOutput,
+  detectNativeClaudeInstall, buildNativeClaudeUpdateCommand,
 } = mod;
 
 // ── parseSemver / compareSemver ─────────────────────────────────────────────
@@ -54,6 +55,16 @@ describe('compareSemver', () => {
   });
 });
 
+describe('parseClaudeVersionOutput', () => {
+  it('extracts Claude Code version output', () => {
+    assert.equal(parseClaudeVersionOutput('2.1.220 (Claude Code)'), '2.1.220');
+  });
+
+  it('returns null when no version is present', () => {
+    assert.equal(parseClaudeVersionOutput('Claude Code'), null);
+  });
+});
+
 // ── buildInstallCommand ─────────────────────────────────────────────────────
 
 describe('buildInstallCommand', () => {
@@ -85,6 +96,15 @@ describe('buildInstallCommand', () => {
   });
 });
 
+describe('buildNativeClaudeUpdateCommand', () => {
+  it('runs the native claude binary with update', () => {
+    const r = buildNativeClaudeUpdateCommand('/tmp/claude');
+    assert.equal(r.cmd, '/tmp/claude');
+    assert.deepEqual(r.args, ['update']);
+    assert.equal(r.displayCmd, 'claude update');
+  });
+});
+
 // ── classifyPathToPm ────────────────────────────────────────────────────────
 
 describe('classifyPathToPm', () => {
@@ -109,6 +129,33 @@ describe('classifyPathToPm', () => {
   it('defaults to npm', () => {
     assert.equal(classifyPathToPm('/Users/x/.nvm/versions/node/v20/lib/node_modules/foo'), 'npm');
     assert.equal(classifyPathToPm('/usr/local/lib/node_modules/foo'), 'npm');
+  });
+});
+
+describe('detectNativeClaudeInstall', () => {
+  it('returns null when no native binary exists', () => {
+    const r = detectNativeClaudeInstall({
+      home: '/tmp/missing',
+      exists: () => false,
+      execFile: () => '',
+    });
+    assert.equal(r, null);
+  });
+
+  it('detects native install version from claude --version', () => {
+    const seen = [];
+    const r = detectNativeClaudeInstall({
+      home: '/home/test',
+      exists: (path) => path.endsWith('/.local/bin/claude'),
+      execFile: (path, args) => {
+        seen.push([path, args]);
+        return '2.1.220 (Claude Code)';
+      },
+    });
+    assert.equal(r.version, '2.1.220');
+    assert.equal(r.installMethod, 'native');
+    assert.ok(r.path.endsWith('/.local/bin/claude'));
+    assert.deepEqual(seen[0][1], ['--version']);
   });
 });
 
@@ -191,10 +238,37 @@ describe('computeUpdatePlan', () => {
       checkClaude: true,
       getInstalled: () => null,
       fetchLatest: async () => '1.0.0',
+      getNativeClaude: () => null,
     });
     assert.equal(plan.claude.hasUpdate, false);
     assert.equal(plan.claude.installed, null);
     assert.equal(plan.claude.latest, '1.0.0');
+  });
+
+  it('uses native Claude Code version when npm package is not installed', async () => {
+    const plan = await computeUpdatePlan({
+      checkSelf: false,
+      checkClaude: true,
+      getInstalled: () => null,
+      fetchLatest: async () => '2.1.220',
+      getNativeClaude: () => ({ installMethod: 'native', path: '/home/test/.local/bin/claude', version: '2.1.220' }),
+    });
+    assert.equal(plan.claude.installed, '2.1.220');
+    assert.equal(plan.claude.installMethod, 'native');
+    assert.equal(plan.claude.hasUpdate, false);
+  });
+
+  it('flags native Claude Code update when native version is behind latest', async () => {
+    const plan = await computeUpdatePlan({
+      checkSelf: false,
+      checkClaude: true,
+      getInstalled: () => null,
+      fetchLatest: async () => '2.1.220',
+      getNativeClaude: () => ({ installMethod: 'native', path: '/home/test/.local/bin/claude', version: '2.1.100' }),
+    });
+    assert.equal(plan.claude.installed, '2.1.100');
+    assert.equal(plan.claude.installMethod, 'native');
+    assert.equal(plan.claude.hasUpdate, true);
   });
 
   it('omits sections when check flags are false', async () => {
