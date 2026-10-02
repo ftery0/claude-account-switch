@@ -8,7 +8,7 @@ import { installAllShells } from '../lib/shell.mjs';
 import { listProfiles, profileDir, profileExists } from '../lib/profile.mjs';
 import { success } from '../lib/ui.mjs';
 import * as prompt from '../lib/prompt.mjs';
-import { maybePromptSelfUpdate } from '../lib/self-update.mjs';
+import { scheduleSelfUpdate } from '../lib/self-update.mjs';
 
 export async function shell(argv = []) {
   const [subcommand, ...args] = argv;
@@ -43,7 +43,6 @@ export async function shell(argv = []) {
 }
 
 async function launch(args, selected) {
-  await maybePromptSelfUpdate();
   const profile = selected ?? await selectProfile();
   if (!profile) {
     process.exitCode = 130;
@@ -56,6 +55,7 @@ async function launch(args, selected) {
     process.exitCode = 127;
     return;
   }
+  scheduleSelfUpdate();
   if (getActiveProfile() !== profile) setActiveProfile(profile);
   process.stderr.write(`[claude-account-switch] Profile: ${profile}\n`);
   const cmd = bin.endsWith('.js') ? process.execPath : bin;
@@ -65,8 +65,9 @@ async function launch(args, selected) {
       stdio: 'inherit', shell: false,
       env: { ...process.env, CLAUDE_CONFIG_DIR: profileDir(profile) },
     });
-    const onInt = () => child.kill('SIGINT');
-    const onTerm = () => child.kill('SIGTERM');
+    let interrupted;
+    const onInt = () => { interrupted = 'SIGINT'; child.kill('SIGINT'); };
+    const onTerm = () => { interrupted = 'SIGTERM'; child.kill('SIGTERM'); };
     process.on('SIGINT', onInt);
     process.on('SIGTERM', onTerm);
     const cleanup = () => {
@@ -80,7 +81,7 @@ async function launch(args, selected) {
     });
     child.once('close', (code, signal) => {
       cleanup();
-      resolve(code ?? (128 + (osConstants.signals[signal] ?? 1)));
+      resolve(interrupted ? 128 + osConstants.signals[interrupted] : code ?? (128 + (osConstants.signals[signal] ?? 1)));
     });
   });
   process.exitCode = result;

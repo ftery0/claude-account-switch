@@ -27,13 +27,17 @@ With multiple profiles, `claude` shows a picker in interactive terminals. In scr
 
 ## Existing users
 
-Repeated `init` shows your current setup without changing it. To repair or upgrade shell integration:
+Repeated `init` shows your current setup without changing it. Users of 1.x run this once to enable the new runtime and automatic updates; it also repairs shell integration:
 
 ```bash
 npx claude-account-switch@latest install-shell
 ```
 
-The shell uses a local runtime in `~/.claude-profiles/_runtime`, so global installation and the temporary npx cache are not needed for daily use. Node.js and Claude Code must remain available.
+The shell uses a local runtime in `~/.claude-profiles/_runtime`, so global installation and the temporary npx cache are not needed for daily use. Node.js, npm and Claude Code must remain available. Open a new terminal after the first upgrade.
+
+Interactive Claude launches check for this tool's updates once daily in the background. A verified compatible package becomes active on the next launch. Active sessions keep their existing files; account data, harness hooks and shell profiles are not rewritten. Offline or failed downloads keep the installed version. Noninteractive launches do not update.
+
+Set `CLAUDE_SWITCH_DISABLE_AUTO_UPDATE=1` to disable automatic updates. For an immediate update, run `node ~/.claude-profiles/_runtime/bin/cli.mjs update`; add `--check` to check without installing. Global npm installations are independent; the shell runtime updates itself. Previous runtime versions are retained to protect active sessions.
 
 ## Commands
 
@@ -44,12 +48,12 @@ The shell uses a local runtime in `~/.claude-profiles/_runtime`, so global insta
 | `list` / `use <name>` | View or switch profiles |
 | `migrate <name> --from <path>` | Copy existing configuration safely |
 | `install-shell` | Install, repair or refresh the local runtime |
-| `update --check` | Check this package's published version |
+| `update [--check]` | Update the local runtime; `--check` checks without installing |
 | `mcp list` | Read legacy MCP names and migration guidance |
 
 Migration preserves the source and stops on conflicting data. Skills, agents, rules, hooks and `CLAUDE.md` stay with the selected profile. macOS Keychain credentials are not copied; Claude may require login in the new profile. See [migration and compatibility](https://ftery0.github.io/claude-account-switch/guide/commands).
 
-Version 2 removes the separate MCP editor and Claude installer. Use official `claude mcp` and Claude's [update mechanism](https://code.claude.com/docs/en/setup#update-manually). Existing legacy MCP files remain unchanged. Update notifications are off by default.
+Version 2 removes the separate MCP editor and Claude installer. Use official `claude mcp` and Claude's [update mechanism](https://code.claude.com/docs/en/setup#update-manually). Existing legacy MCP files remain unchanged. Automatic updates affect only this tool, never Claude Code.
 
 Platform guides: [macOS](docs/setup-macos.md) · [Linux](docs/setup-linux.md) · [Windows](docs/setup-windows.md)
 

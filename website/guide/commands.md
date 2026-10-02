@@ -16,7 +16,7 @@ Prefix these commands with `npx claude-account-switch@latest`, or use `claude-ac
 | `use <name>` | Change active profile |
 | `migrate [name] --from <path>` | Copy configuration; select a target if omitted |
 | `install-shell` | Install, repair or refresh detected shells and the local runtime |
-| `update [--check]` | Check this package and show an upgrade command |
+| `update [--check]` | Update the local runtime; check without installing with `--check` |
 | `mcp [list]` | Read legacy MCP server names and file paths |
 
 Names use lowercase letters, digits and hyphens, up to 30 characters, and start/end with a letter or digit. `_shared` and `default` are reserved.
@@ -51,8 +51,10 @@ Do not assume legacy `mcpServers` in shared settings applies across accounts. Us
 
 ## Update compatibility
 
-`update` and `update --self` check only this package and print an upgrade command. `--yes` does not install anything. `--check` exits 0 when current, 1 for a newer version, or 2 if the check fails.
+`update` and `update --self` install a verified compatible version of this tool into a separate local runtime directory. Existing sessions keep their old files. `--yes` is accepted for compatibility. `--check` never installs and exits 0 when current, 1 for a newer version, or 2 if the check fails.
 
 Legacy `--claude-code` prints [official update guidance](https://code.claude.com/docs/en/setup#update-manually). It does not check Claude's version, so `--claude-code --check` exits 2. Update Claude using `claude update` or your installation's package manager.
 
-Launch-time package update notifications default to off. Set `CLAUDE_SWITCH_CHECK_UPDATES=1` to check once daily during interactive launches. Nothing is installed automatically. `CLAUDE_SWITCH_DISABLE_AUTO_UPDATE=1` remains a compatibility override.
+Interactive launches automatically check and update this tool once daily in the background. New launches use the verified version; account data, harness hooks and shell profiles remain untouched. Noninteractive launches do not update. Set `CLAUDE_SWITCH_DISABLE_AUTO_UPDATE=1` to disable this. Failed checks retry after an hour; failed downloads retain the installed runtime. Node.js and npm are required, and packages with incompatible runtime protocols or Node requirements are rejected.
+
+Users of 1.x run `npx claude-account-switch@latest install-shell` once and open a new terminal to enable this runtime. Daily shell usage does not need a global installation. An independently installed global command is not automatically updated.

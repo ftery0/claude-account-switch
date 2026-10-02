@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Diagnostics;
 using System.Text;
 using System.Threading;
 
@@ -29,6 +30,7 @@ public static class FakeClaude
         var output = "{\"fake\":true,\"args\":[" + string.Join(",", encoded)
             + "],\"config\":" + Quote(Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR"))
             + ",\"hook\":" + Quote(Environment.GetEnvironmentVariable("CAS_HOOK")) + "}";
+        output = output.Substring(0, output.Length - 1) + ",\"pid\":" + Process.GetCurrentProcess().Id + ",\"stdinTty\":" + (!Console.IsInputRedirected ? "true" : "false") + "}";
         string marker = Environment.GetEnvironmentVariable("CAS_FAKE_MARKER");
         if (!string.IsNullOrEmpty(marker)) File.AppendAllText(marker, output + Environment.NewLine, new UTF8Encoding(false));
         if (Environment.GetEnvironmentVariable("CAS_FAKE_QUIET") != "1") Console.WriteLine(output);

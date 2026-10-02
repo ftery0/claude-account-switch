@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, mkdtempSync, cpSync, copyFileSync, renameSync, rmSync, lstatSync } from 'node:fs';
+import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, mkdtempSync, cpSync, copyFileSync, renameSync, rmSync, lstatSync, unlinkSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, dirname, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -93,6 +93,8 @@ function installRuntime() {
       if (moved) renameSync(backup, RUNTIME_DIR);
       throw err;
     }
+    const pointer = join(PROFILES_DIR, '_runtime-current.json');
+    if (existsSync(pointer)) unlinkSync(pointer);
     if (moved) rmSync(backup, { recursive: true, force: true });
   } finally {
     rmSync(stage, { recursive: true, force: true });

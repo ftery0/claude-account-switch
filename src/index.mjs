@@ -32,7 +32,7 @@ function showHelp() {
   use <name>        Change the active profile
   migrate <name>    Import existing settings (--from <path>)
   install-shell     Install or repair shell integration
-  update [--check]  Check this package and show the update command
+  update [--check]  Update this tool; --check only checks
   mcp [list]        Show legacy MCP entries and migration guidance
 
   Examples:

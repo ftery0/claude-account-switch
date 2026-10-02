@@ -1,5 +1,8 @@
 import { parseArgs } from 'node:util';
-import { computeUpdatePlan } from '../lib/updater.mjs';
+import { computeUpdatePlan, compareSemver } from '../lib/updater.mjs';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { installedRuntimeDirectory, runSelfUpdate } from '../lib/self-update.mjs';
 import { info, warn, error } from '../lib/ui.mjs';
 
 export async function update(args = []) {
@@ -22,6 +25,11 @@ export async function update(args = []) {
   let self;
   try {
     ({ self } = await computeUpdatePlan());
+    const runtime = installedRuntimeDirectory();
+    if (runtime) {
+      self.installed = JSON.parse(readFileSync(join(runtime, 'package.json'), 'utf8')).version;
+      self.hasUpdate = compareSemver(self.installed, self.latest) < 0;
+    }
   } catch (err) {
     error(err.message);
     process.exitCode = 2;
@@ -29,8 +37,14 @@ export async function update(args = []) {
   }
   console.log('Package                 Installed   Latest');
   console.log(`${self.pkg}   ${self.installed}       ${self.latest}`);
-  if (self.hasUpdate) info('Update shell integration: npx claude-account-switch@latest install-shell');
-  else info('This package is up to date.');
-  if (values.yes) info('Updates require the explicit install-shell command; no installation was run.');
+  if (!self.hasUpdate) info('This package is up to date.');
+  else if (values.check) info('Run claude-account-switch update to install.');
+  else {
+    const result = await runSelfUpdate({ force: true, computePlan: async () => ({ self }) });
+    if (result.action === 'updated') info(`Updated to ${result.version}. New launches use this version; active sessions keep their files.`);
+    else if (result.reason === 'not-installed') info('Local runtime is not installed; no installation was run. Run: npx claude-account-switch@latest install-shell');
+    else if (result.reason === 'busy') { warn('An update is already running.'); process.exitCode = 2; }
+    else if (result.action === 'failed') { error(`Update failed; existing runtime retained: ${result.error}`); process.exitCode = 2; }
+  }
   if (values.check && !values['claude-code']) process.exitCode = self.hasUpdate ? 1 : 0;
 }

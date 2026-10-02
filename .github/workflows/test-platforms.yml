@@ -110,7 +110,24 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run docs:build
 
+  windows-console:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: node test/windows-console-smoke.mjs --run
+
   wsl:
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [1, 2]
     runs-on: windows-2025
     timeout-minutes: 20
     steps:
@@ -121,11 +138,11 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Test in an isolated WSL1 distribution
+      - name: Test in an isolated WSL${{ matrix.version }} distribution
         shell: pwsh
         run: |
           $PSNativeCommandArgumentPassing = 'Standard'
-          $distro = 'CAS-WSL1'
+          $distro = 'CAS-WSL${{ matrix.version }}'
           $imageName = 'ubuntu-jammy-wsl-amd64-ubuntu22.04lts.rootfs.tar.gz'
           $imageBase = 'https://cloud-images.ubuntu.com/wsl/jammy/current/'
           $compressedImage = Join-Path $env:RUNNER_TEMP $imageName
@@ -149,11 +166,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Could not archive the checkout' }
           $nodeVersion = node -p 'process.versions.node'
           if ($LASTEXITCODE -ne 0 -or $nodeVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Node version unavailable' }
+          if (${{ matrix.version }} -eq 2) {
+            wsl.exe --update --web-download
+            if ($LASTEXITCODE -ne 0) { throw 'WSL2 kernel update failed' }
+          }
           $registered = $false
           try {
-            wsl.exe --import $distro (Join-Path $env:RUNNER_TEMP 'cas-wsl') $tarImage --version 1
-            if ($LASTEXITCODE -ne 0) { throw 'WSL1 import failed' }
+            wsl.exe --import $distro (Join-Path $env:RUNNER_TEMP 'cas-wsl') $tarImage --version ${{ matrix.version }}
+            if ($LASTEXITCODE -ne 0) { throw 'WSL import failed' }
             $registered = $true
+            wsl.exe --list --verbose
+            if ($LASTEXITCODE -ne 0) { throw 'WSL version listing failed' }
             $sourceUnix = wsl.exe -d $distro -u root --exec wslpath -u $sourceArchive
             if ($LASTEXITCODE -ne 0) { throw 'Could not translate the source path' }
             $script = @'
