@@ -100,7 +100,7 @@ function installRuntime() {
 }
 
 function writeTemplate(templateName, targetFile) {
-  const content = readFileSync(join(TEMPLATES_DIR, templateName), 'utf8');
+  const content = readFileSync(join(TEMPLATES_DIR, templateName), 'utf8').replace(/\r\n/g, '\n');
   writeFileSync(targetFile, content, EXEC_MODE);
 }
 

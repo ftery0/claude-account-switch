@@ -13,7 +13,17 @@ function __claude_switch_launch
   set -l profile $argv[1]
   set -e argv[1]
   set -l hook "$HOME/.claude-profiles/$profile/pre-launch.fish"
-  command fish -c 'set -l hook $argv[1]; set -e argv[1]; if test -f "$hook"; source "$hook"; or exit $status; end; exec $argv' "$hook" node "$HOME/.claude-profiles/_runtime/bin/cli.mjs" shell launch --profile "$profile" -- $argv
+  command fish -c '
+    function __claude_switch_exec
+      set -l hook $argv[1]
+      set -e argv[1]
+      if test -f "$hook"
+        source "$hook"; or return $status
+      end
+      exec $argv
+    end
+    __claude_switch_exec $argv
+  ' "$hook" node "$HOME/.claude-profiles/_runtime/bin/cli.mjs" shell launch --profile "$profile" -- $argv
 end
 
 function claude

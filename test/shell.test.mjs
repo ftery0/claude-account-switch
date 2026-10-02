@@ -1,9 +1,10 @@
 import './helpers/home.mjs';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, mkdirSync, mkdtempSync, writeFileSync, symlinkSync, renameSync, unlinkSync, chmodSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, mkdtempSync, writeFileSync, symlinkSync, renameSync, unlinkSync, chmodSync, statSync, cpSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { homedir } from 'node:os';
 import { installShellIntegration } from '../src/lib/shell.mjs';
 import { PROFILES_DIR } from '../src/lib/constants.mjs';
@@ -61,6 +62,30 @@ function assertProfileAppend(fixtureHome, original, decode) {
 }
 
 describe('shell installation', () => {
+  it('installs executable LF templates from a CRLF source checkout', () => {
+    const source = join(home, 'crlf-package');
+    const root = fileURLToPath(new URL('..', import.meta.url));
+    mkdirSync(source, { recursive: true });
+    for (const entry of ['bin', 'src', 'package.json']) cpSync(join(root, entry), join(source, entry), { recursive: true });
+    for (const extension of ['sh', 'fish', 'ps1']) {
+      const template = join(source, 'src', 'shell-templates', `integration.${extension}`);
+      writeFileSync(template, readFileSync(template, 'utf8').replace(/\r?\n/g, '\r\n'));
+    }
+    const fixtureHome = join(home, 'crlf-home');
+    mkdirSync(fixtureHome);
+    const moduleUrl = pathToFileURL(join(source, 'src/lib/shell.mjs')).href;
+    execFileSync(process.execPath, ['--input-type=module', '-e',
+      `const {installShellIntegration}=await import(${JSON.stringify(moduleUrl)});for(const shell of ['bash','fish','powershell'])installShellIntegration(shell);`], {
+      env: { ...process.env, HOME: fixtureHome, USERPROFILE: fixtureHome, XDG_CONFIG_HOME: join(fixtureHome, '.config') },
+      stdio: ['ignore', 'pipe', 'pipe'], timeout: 20000,
+    });
+    for (const extension of ['sh', 'fish', 'ps1']) {
+      const installed = readFileSync(join(fixtureHome, '.claude-profiles', `.shell-integration.${extension}`), 'utf8');
+      assert.ok(installed.includes('\n'));
+      assert.ok(!installed.includes('\r'), extension);
+    }
+  });
+
   it('creates a complete local runtime for all supported shell templates', () => {
     for (const shell of ['bash', 'zsh', 'fish', 'powershell']) installShellIntegration(shell);
     for (const file of ['bin/cli.mjs', 'src/index.mjs', 'src/commands/shell.mjs', 'package.json']) {

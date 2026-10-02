@@ -145,7 +145,7 @@ jobs:
             } finally { $tarStream.Dispose() }
           } finally { $compressedStream.Dispose() }
           $sourceArchive = Join-Path $env:RUNNER_TEMP 'cas-source.tar'
-          git archive --format=tar --output=$sourceArchive HEAD
+          git -c core.autocrlf=false archive --format=tar --output=$sourceArchive HEAD
           if ($LASTEXITCODE -ne 0) { throw 'Could not archive the checkout' }
           $nodeVersion = node -p 'process.versions.node'
           if ($LASTEXITCODE -ne 0 -or $nodeVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Node version unavailable' }

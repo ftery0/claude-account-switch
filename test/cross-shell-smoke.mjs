@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { accessSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { accessSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -41,14 +41,15 @@ export function compileFakeClaude(target, env) {
   const source = join(repository, 'test/fixtures/fake-claude.cs');
   const command = 'Add-Type -TypeDefinition (Get-Content -Raw -LiteralPath $env:CAS_FAKE_SOURCE) -OutputAssembly $env:CAS_FAKE_TARGET -OutputType ConsoleApplication -ErrorAction Stop';
   const result = spawnSync(compiler, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], {
-    env: { ...env, CAS_FAKE_SOURCE: source, CAS_FAKE_TARGET: target }, encoding: 'utf8', timeout: 30000,
+    env: { ...env, CAS_FAKE_SOURCE: source, CAS_FAKE_TARGET: target },
+    stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', timeout: 120000,
   });
   assert.equal(result.status, 0, result.stderr || String(result.error));
   assert.ok(existsSync(target), 'C# compiler did not create the fake executable');
 }
 
 export function createShellFixture(profiles = ['work'], shell = findShell(windows ? 'powershell' : 'bash')) {
-  const workspace = mkdtempSync(join(tmpdir(), 'cas-shell-fixture-'));
+  const workspace = realpathSync.native(mkdtempSync(join(tmpdir(), 'cas-shell-fixture-')));
   try {
     const home = join(workspace, 'home with spaces');
     const temp = join(workspace, 'tmp');
