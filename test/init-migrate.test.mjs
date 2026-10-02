@@ -16,6 +16,7 @@ import { compileFakeClaude } from './cross-shell-smoke.mjs';
 
 const cli = fileURLToPath(new URL('../bin/cli.mjs', import.meta.url));
 const childShell = process.platform === 'win32' ? 'powershell' : '/bin/zsh';
+const commandTimeout = process.platform === 'win32' ? 15000 : 5000;
 
 function write(path, content) {
   mkdirSync(join(path, '..'), { recursive: true });
@@ -33,7 +34,7 @@ function snapshot(path) {
 function run(args, env = {}) {
   return spawnSync(process.execPath, [cli, ...args], {
     env: { ...process.env, SHELL: childShell, ...env },
-    encoding: 'utf8', timeout: 5000,
+    encoding: 'utf8', timeout: commandTimeout,
   });
 }
 
@@ -53,7 +54,7 @@ function interactive(argv, replies, env = {}) {
     const timeout = setTimeout(() => {
       child.kill();
       reject(new Error(`Init did not finish: ${stdout} ${stderr}`));
-    }, 5000);
+    }, commandTimeout);
     child.stdout.on('data', data => {
       stdout += data.toString();
       if (index < replies.length && stdout.includes(replies[index][0])) {

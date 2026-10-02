@@ -111,7 +111,10 @@ export function quoteArgument(value, kind) {
 
 export function shellArguments(shell, script) {
   const kind = shellKind(shell);
-  if (['pwsh', 'powershell'].includes(kind)) return ['-NoLogo', '-NoProfile', '-Command', script];
+  if (['pwsh', 'powershell'].includes(kind)) {
+    return ['-NoLogo', '-NoProfile', '-NonInteractive', '-OutputFormat', 'Text',
+      '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')];
+  }
   if (kind === 'cmd') return ['/d', '/s', '/c', script];
   if (kind === 'fish') return ['--no-config', '-c', script];
   if (kind === 'zsh') return ['-f', '-c', script];
@@ -153,7 +156,7 @@ export function runCrossShellSmoke({ repo = repository, shell, psMode = 'Default
     const launch = values => cmd ? `node ${quote(runtime)} shell launch ${values.map(quote).join(' ')}` : `claude ${values.map(quote).join(' ')}`;
     const ending = powerShell ? '; exit $LASTEXITCODE' : cmd ? '' : kind === 'fish' ? '; exit $status' : '; exit $?';
     const run = (script, extra = {}) => {
-      const result = spawnSync(shell, shellArguments(shell, script), { cwd: fixture.workspace, env: { ...fixture.env, ...extra }, windowsVerbatimArguments: cmd, encoding: 'utf8', timeout: 15000 });
+      const result = spawnSync(shell, shellArguments(shell, script), { cwd: fixture.workspace, env: { ...fixture.env, ...extra }, stdio: ['ignore', 'pipe', 'pipe'], windowsVerbatimArguments: cmd, encoding: 'utf8', timeout: 15000 });
       lastResult = { status: result.status, signal: result.signal, stdout: result.stdout, stderr: result.stderr, error: result.error?.message };
       return result;
     };
@@ -200,7 +203,10 @@ export function runCrossShellSmoke({ repo = repository, shell, psMode = 'Default
         assert.equal(fakeOutput(hooked).hook, 'profile value');
         assert.ok(hooked.stdout.split(/\r?\n/).includes(powerShell || kind === 'fish' ? 'PARENT=' : 'PARENT=unset'), hooked.stdout);
         checks.push('hook-environment-isolation');
-        writeFileSync(hook, powerShell ? "throw 'fixture hook failure'\n" : 'return 17\n');
+        let failureHook = 'return 17\n';
+        if (powerShell) failureHook = "throw 'fixture hook failure'\n";
+        else if (kind === 'fish') failureHook = 'function __cas_hook_failure\n  return 17\nend\n__cas_hook_failure\n';
+        writeFileSync(hook, failureHook);
         const failed = run(source + launch(['--help']) + ending);
         assert.equal(failed.status, powerShell ? 1 : 17, failed.stderr);
         assert.equal(failed.stdout.trim(), '');
