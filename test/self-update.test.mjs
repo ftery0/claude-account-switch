@@ -1,7 +1,7 @@
 import './helpers/home.mjs';
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, cpSync, readdirSync, symlinkSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, cpSync, readdirSync, symlinkSync, utimesSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -116,6 +116,17 @@ describe('automatic immutable runtime updates', () => {
   it('recovers a stale updater lock without changing live metadata', async () => {
     mkdirSync(join(PROFILES_DIR, '_update-lock'));
     writeFileSync(join(PROFILES_DIR, '_update-lock/owner.json'), JSON.stringify({ pid: 2147483647 }));
+    assert.equal((await runSelfUpdate({ computePlan, download: fixtureDownload() })).action, 'updated');
+  });
+  it('recovers from an old empty lock left by interruption before writing its owner', async () => {
+    const lock = join(PROFILES_DIR, '_update-lock');
+    mkdirSync(lock);
+    const old = new Date(Date.now() - 600000);
+    utimesSync(lock, old, old);
+    assert.equal((await runSelfUpdate({ computePlan, download: fixtureDownload() })).action, 'updated');
+  });
+  it('recovers malformed updater state without editing account metadata', async () => {
+    writeFileSync(stateFile, 'interrupted JSON');
     assert.equal((await runSelfUpdate({ computePlan, download: fixtureDownload() })).action, 'updated');
   });
   it('does not follow malicious pointers or updater symlinks', async () => {

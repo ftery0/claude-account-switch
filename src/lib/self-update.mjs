@@ -1,6 +1,6 @@
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, cpSync, renameSync, rmSync, lstatSync, readdirSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, cpSync, renameSync, rmSync, lstatSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { dirname, join, delimiter, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -63,10 +63,14 @@ function acquireLock() {
     if (error.code !== 'EEXIST') throw error;
     if (lstatSync(lockDir).isSymbolicLink()) throw new Error('Update lock must not be a symlink');
     let owner;
-    try { owner = JSON.parse(readFileSync(join(lockDir, 'owner.json'), 'utf8')); } catch { return null; }
-    if (!Number.isInteger(owner.pid) || owner.pid < 1) return null;
-    try { process.kill(owner.pid, 0); return null; } catch (probe) {
-      if (probe.code !== 'ESRCH') return null;
+    try { owner = JSON.parse(readFileSync(join(lockDir, 'owner.json'), 'utf8')); } catch {
+      if (readdirSync(lockDir).length !== 0 || Date.now() - statSync(lockDir).mtimeMs < 300000) return null;
+    }
+    if (owner) {
+      if (!Number.isInteger(owner.pid) || owner.pid < 1) return null;
+      try { process.kill(owner.pid, 0); return null; } catch (probe) {
+        if (probe.code !== 'ESRCH') return null;
+      }
     }
     const stale = lockDir + '-stale-' + randomUUID();
     try { renameSync(lockDir, stale); } catch { return null; }
@@ -124,7 +128,7 @@ async function downloadPackage(version, workspace, env) {
   await execute(process.execPath, [npm, 'install', `${SELF_PKG}@${version}`,
     '--prefix', workspace, '--ignore-scripts', '--no-audit', '--no-fund', '--no-save', '--package-lock=false', '--omit=dev',
     '--fetch-retries=0', '--fetch-timeout=30000', '--registry', env.CAS_TEST_REGISTRY_URL || 'https://registry.npmjs.org'], {
-    env: isolatedEnv, timeout: 120000, maxBuffer: 1024 * 1024, windowsHide: true,
+    cwd: workspace, env: isolatedEnv, timeout: 120000, maxBuffer: 1024 * 1024, windowsHide: true,
   });
   return join(workspace, 'node_modules', SELF_PKG);
 }
@@ -144,12 +148,12 @@ async function activatePackage(source, version) {
   const validationHome = join(dirname(source), 'validation-home');
   mkdirSync(validationHome);
   const validation = await execute(process.execPath, [join(source, 'bin/cli.mjs'), '--version'], {
-    env: { HOME: validationHome, USERPROFILE: validationHome, CLAUDE_SWITCH_DISABLE_AUTO_UPDATE: '1', NO_COLOR: '1' },
+    cwd: validationHome, env: { HOME: validationHome, USERPROFILE: validationHome, CLAUDE_SWITCH_DISABLE_AUTO_UPDATE: '1', NO_COLOR: '1' },
     timeout: 10000, windowsHide: true,
   });
   if (validation.stdout.trim() !== version) throw new Error('Runtime version verification failed');
   await execute(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(pathToFileURL(join(source, 'src/commands/shell.mjs')).href)})`], {
-    env: { HOME: validationHome, USERPROFILE: validationHome, CLAUDE_SWITCH_DISABLE_AUTO_UPDATE: '1', NO_COLOR: '1' },
+    cwd: validationHome, env: { HOME: validationHome, USERPROFILE: validationHome, CLAUDE_SWITCH_DISABLE_AUTO_UPDATE: '1', NO_COLOR: '1' },
     timeout: 10000, windowsHide: true,
   });
   if (existsSync(versionsDir) && lstatSync(versionsDir).isSymbolicLink()) throw new Error('Runtime updates must not be a symlink');
@@ -207,7 +211,7 @@ export function scheduleSelfUpdate({ env = process.env, stdin = process.stdin, s
     if (!installedRuntimeDirectory()) return { action: 'skipped', reason: 'not-installed' };
     if (!shouldCheckSelfUpdate(readState())) return { action: 'skipped', reason: 'recent' };
     const child = spawnWorker(process.execPath, [fileURLToPath(import.meta.url), '--worker'], {
-      env, detached: true, stdio: 'ignore', windowsHide: true,
+      cwd: PROFILES_DIR, env, detached: true, stdio: 'ignore', windowsHide: true,
     });
     child.on('error', () => {});
     child.unref();
