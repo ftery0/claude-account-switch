@@ -15,7 +15,6 @@ jsonLd:
   description: "Claude Code를 위한 멀티 계정 프로필 관리 도구. 회사와 개인 계정을 즉시 전환합니다."
   url: "https://ftery0.github.io/claude-account-switch/ko/"
   downloadUrl: "https://www.npmjs.com/package/claude-account-switch"
-  softwareVersion: "1.2.2"
   author:
     "@type": "Person"
     name: "haejun"
@@ -35,7 +34,7 @@ hero:
 
 features:
   - title: 원커맨드 설정
-    details: npx claude-account-switch init 한 줄이면 인터랙티브 위자드가 모든 설정을 안내합니다.
+    details: 프로필 생성, 기존 설정 복사와 로컬 실행 파일 설치를 안내합니다.
   - title: 즉시 프로필 전환
     details: cpf <name>으로 밀리초 만에 프로필을 전환합니다. 재시작 불필요.
   - title: Zero Dependencies

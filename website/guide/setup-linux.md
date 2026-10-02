@@ -1,128 +1,29 @@
 ---
-title: Linux Setup Guide — claude-account-switch
-description: Step-by-step guide to set up claude-account-switch on Linux and WSL. Supports bash, zsh, and fish shells.
-jsonLd:
-  "@context": "https://schema.org"
-  "@type": "HowTo"
-  name: "Set up claude-account-switch on Linux"
-  description: "Install and configure multi-account profile switching for Claude Code on Linux"
-  step:
-    - "@type": "HowToStep"
-      name: "Install prerequisites"
-      text: "Install Node.js 18+ via nvm or your package manager, and Claude Code (npm i -g @anthropic-ai/claude-code)"
-    - "@type": "HowToStep"
-      name: "Run the init wizard"
-      text: "Run npx claude-account-switch init in your terminal"
-    - "@type": "HowToStep"
-      name: "Shell integration auto-installs"
-      text: "Shell integration is auto-installed for all detected shells (bash, zsh, fish)"
-    - "@type": "HowToStep"
-      name: "Activate"
-      text: "Run source ~/.bashrc or open a new terminal window"
-    - "@type": "HowToStep"
-      name: "Start using"
-      text: "Use claude, cpf <name>, or claude-pick to manage profiles"
+title: Linux / WSL Setup — claude-account-switch
+description: Existing installation checks, profile setup and shell repair.
+jsonLd: {"@context": "https://schema.org", "@type": "HowTo", "name": "Linux / WSL profile setup", "step": [{"@type": "HowToStep", "name": "Prerequisites", "text": "Check Node.js 18.19+ (18.x) or 20.10+, npm and your existing Claude Code installation."}, {"@type": "HowToStep", "name": "Setup", "text": "Run npx claude-account-switch@latest init to configure profiles."}, {"@type": "HowToStep", "name": "Launch", "text": "Open a new terminal and run claude."}]}
 ---
 
-# Linux Setup Guide
+# Linux / WSL Setup
 
-## Prerequisites
-
-- **Node.js 18+** — Install via your package manager or [nvm](https://github.com/nvm-sh/nvm)
-  ```bash
-  # Using nvm (recommended)
-  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-  nvm install --lts
-
-  # Ubuntu / Debian
-  sudo apt install nodejs npm
-
-  # Fedora
-  sudo dnf install nodejs
-  ```
-- **Claude Code** — `npm i -g @anthropic-ai/claude-code`
-
-## Setup
-
-### 1. Run the init wizard
+Use Node.js 18.19+ (18.x) or 20.10+, npm and Claude Code. Keep your existing Claude installation; if missing, follow the [official installation guide](https://code.claude.com/docs/en/setup).
 
 ```bash
-npx claude-account-switch init
+npx claude-account-switch@latest init
 ```
 
-### 2. Shell integration (automatic)
+Open a new terminal and use `claude`, `cpf personal` and `claude-pick`. Multiple profiles show a picker on interactive launch. Existing setups get a summary when `init` is repeated.
 
-The init wizard auto-detects all available shells on your system and installs integration for each one. On Linux, this typically includes:
-
-- **bash (~/.bashrc)** — default on most distros
-- **zsh (~/.zshrc)** — if `.zshrc` exists
-- **fish (~/.config/fish/config.fish)** — if fish is installed
-
-No manual shell selection needed.
-
-### 3. Activate
+## Shell repair
 
 ```bash
-# For bash
-source ~/.bashrc
-
-# For zsh
-source ~/.zshrc
-
-# For fish
-source ~/.config/fish/config.fish
-
-# Or just open a new terminal window
+npx claude-account-switch@latest install-shell
 ```
 
-### 4. Use
+Configuration locations: `~/.bashrc` (bash), `~/.zshrc` (zsh), `~/.config/fish/config.fish` (fish).
 
-```bash
-claude           # Launch Claude with the active profile
-cpf <name>       # Quick switch
-claude-pick      # Interactive picker
-```
+If an executable is missing, check that Claude and Node.js are on PATH. For a missing local runtime, run the repair command above and open a new terminal.
 
-## How Shared Settings Work
+Set up WSL separately in its Linux home. Windows setup does not automatically configure WSL.
 
-On Linux, shared files (`settings.json`, `commands/`) are symlinked from `_shared/` into each profile. Changes to shared settings automatically apply to all profiles.
-
-## WSL (Windows Subsystem for Linux)
-
-If you're running Linux via WSL, this guide applies as-is. WSL is treated as a standard Linux environment.
-
-## Troubleshooting
-
-### `command not found: claude`
-
-Make sure Claude Code is installed and in your PATH:
-
-```bash
-npm i -g @anthropic-ai/claude-code
-which claude
-```
-
-### Permission errors with global npm install
-
-Use nvm to manage Node.js (avoids `sudo` for global packages), or fix npm permissions:
-
-```bash
-mkdir -p ~/.npm-global
-npm config set prefix '~/.npm-global'
-echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
-source ~/.bashrc
-```
-
-### Shell integration not working after restart
-
-Verify the source line was added:
-
-```bash
-grep "shell-integration" ~/.bashrc   # or ~/.zshrc
-```
-
-If missing, run:
-
-```bash
-npx claude-account-switch install-shell
-```
+[Shell behavior and hooks](/guide/shell-integration) · [Migration, MCP and updates](/guide/commands)

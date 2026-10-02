@@ -1,4 +1,4 @@
-import { META_FILE } from './constants.mjs';
+import { META_FILE, PROFILE_NAME_REGEX, PROFILE_NAME_MAX_LENGTH, RESERVED_NAMES } from './constants.mjs';
 import { readJsonFile, writeJsonFile } from './json-fs.mjs';
 
 const DEFAULT_META = {
@@ -10,7 +10,16 @@ const DEFAULT_META = {
 
 export function readMeta() {
   const meta = readJsonFile(META_FILE, DEFAULT_META);
-  return Array.isArray(meta.profiles) ? meta : { ...DEFAULT_META };
+  if (!meta || !Array.isArray(meta.profiles)
+    || meta.profiles.some(name => typeof name !== 'string'
+      || !PROFILE_NAME_REGEX.test(name) || name.length > PROFILE_NAME_MAX_LENGTH
+      || RESERVED_NAMES.includes(name))
+    || new Set(meta.profiles).size !== meta.profiles.length
+    || (meta.activeProfile !== null && !meta.profiles.includes(meta.activeProfile))
+    || typeof meta.shareSettings !== 'boolean') {
+    throw new Error(`Invalid profile metadata in ${META_FILE}. Restore it before continuing.`);
+  }
+  return meta;
 }
 
 export function writeMeta(meta) {

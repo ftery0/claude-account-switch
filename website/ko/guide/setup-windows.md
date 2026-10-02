@@ -1,123 +1,29 @@
 ---
-title: Windows 설치 가이드 — claude-account-switch
-description: Windows에서 claude-account-switch를 설정하는 단계별 가이드. PowerShell, Git Bash, WSL 지원.
-jsonLd:
-  "@context": "https://schema.org"
-  "@type": "HowTo"
-  name: "Windows에서 claude-account-switch 설정하기"
-  description: "Windows에서 Claude Code 멀티 계정 프로필 전환을 설치하고 설정하는 방법"
-  step:
-    - "@type": "HowToStep"
-      name: "사전 요구사항 설치"
-      text: "nodejs.org에서 Node.js 18+ 설치, Claude Code 설치 (npm i -g @anthropic-ai/claude-code)"
-    - "@type": "HowToStep"
-      name: "초기 설정 마법사 실행"
-      text: "PowerShell을 열고 npx claude-account-switch init 실행"
-    - "@type": "HowToStep"
-      name: "셸 통합 자동 설치"
-      text: "감지된 모든 셸(PowerShell, bash, zsh)에 셸 통합이 자동 설치됩니다"
-    - "@type": "HowToStep"
-      name: "활성화"
-      text: ". $PROFILE 실행 또는 새 PowerShell 창 열기"
-    - "@type": "HowToStep"
-      name: "사용 시작"
-      text: "claude, cpf <name>, 또는 claude-pick으로 프로필 관리"
+title: Windows 설정 — claude-account-switch
+description: 기존 설치 확인, 프로필 설정과 셸 복구.
+jsonLd: {"@context": "https://schema.org", "@type": "HowTo", "name": "Windows 프로필 설정", "step": [{"@type": "HowToStep", "name": "준비", "text": "Node.js 18.19+ (18계열) 또는 20.10+, npm과 기존 Claude Code 설치를 확인합니다."}, {"@type": "HowToStep", "name": "초기 설정", "text": "npx claude-account-switch@latest init으로 프로필을 설정합니다."}, {"@type": "HowToStep", "name": "실행", "text": "새 터미널을 열고 claude를 실행합니다."}]}
 ---
 
-# Windows 설치 가이드
+# Windows 설정
 
-## 사전 요구사항
-
-- **Node.js 18+** — [다운로드](https://nodejs.org/)
-- **Claude Code** — `npm i -g @anthropic-ai/claude-code`
-
-## 설치
-
-### 1. 초기 설정 마법사 실행
-
-**PowerShell**을 열고 실행:
+Node.js 18.19+ (18계열) 또는 20.10+와 npm, Claude Code가 필요합니다. 기존 Claude가 있으면 재설치하지 않습니다. 없는 경우 [공식 설치 가이드](https://code.claude.com/docs/en/setup)를 따릅니다.
 
 ```powershell
-npx claude-account-switch init
+npx claude-account-switch@latest init
 ```
 
-### 2. 셸 통합 (자동)
+새 터미널을 열고 `claude`, `cpf personal`, `claude-pick`을 사용합니다. 여러 프로필이면 실행 시 선택기가 나옵니다. 기존 초기화에서 `init`은 요약만 보여줍니다.
 
-초기 설정 마법사가 사용 가능한 셸을 자동 감지하고 통합을 설치합니다. Windows에서는 일반적으로:
-
-- **PowerShell (`$PROFILE`)** — Windows에서 자동 설치
-- **bash (~/.bashrc)** — Git Bash 또는 WSL이 감지된 경우
-- **zsh (~/.zshrc)** — zsh가 설치된 WSL이 감지된 경우
-
-수동 셸 선택이 필요 없습니다.
-
-### 3. 활성화
+## 셸 복구
 
 ```powershell
-# 프로필 다시 로드
-. $PROFILE
-
-# 또는 새 PowerShell 창 열기
+npx claude-account-switch@latest install-shell
 ```
 
-### 4. 사용
+Windows의 Documents 폴더 아래 PowerShell 5.1과 PowerShell 7 콘솔 프로필을 모두 연결합니다. OneDrive 등으로 이동한 Documents 폴더도 처리하며, 기존 프로필의 내용과 인코딩을 보존합니다.
 
-```powershell
-claude           # 활성 프로필로 Claude 실행
-cpf <name>       # 빠른 프로필 전환
-claude-pick      # 인터랙티브 프로필 선택
-```
+실행 파일이 없다는 오류가 나면 Claude와 Node.js가 PATH에 있는지 확인합니다. 로컬 실행 파일이 없으면 위 복구 명령을 실행하고 새 터미널을 엽니다.
 
-## 선택사항: 개발자 모드 활성화
+PowerShell의 `$PROFILE`과 설치 위치를 확인하세요. 실행 정책·회사 정책으로 프로필 로딩이 차단되면 해당 정책 안내를 따릅니다. Developer Mode 없이 파일 링크 생성에 실패하면 복사하며, 디렉터리는 junction으로 연결합니다. 복사된 설정 파일은 자동 동기화되지 않습니다. WSL은 [Linux 가이드](/ko/guide/setup-linux)를 따릅니다.
 
-Windows에서는 공유 설정(`settings.json`)에 심링크 생성을 먼저 시도합니다. 실패하면(개발자 모드 미활성) 파일을 복사하고 안내 메시지를 표시합니다.
-
-심링크를 활성화하려면:
-
-1. **설정 > 개발자용** 열기
-2. **개발자 모드** 활성화
-
-개발자 모드 없이도 정상 동작합니다 — 공유 디렉토리(`commands/`)는 항상 junction을 사용하고(별도 권한 불필요), 공유 파일은 링크 대신 복사됩니다.
-
-## 대안: Git Bash / WSL
-
-셸 통합은 감지된 모든 셸에 자동 설치됩니다. Git Bash나 WSL이 있으면 `init` 실행 시 자동으로 설정됩니다.
-
-### Git Bash
-
-```bash
-npx claude-account-switch init
-source ~/.bashrc
-```
-
-### WSL (Windows Subsystem for Linux)
-
-WSL은 완전한 Linux 환경으로 동작합니다. [Linux 설치 가이드](/ko/guide/setup-linux)를 참고하세요.
-
-## 문제 해결
-
-### `running scripts is disabled on this system`
-
-PowerShell 실행 정책이 프로필 스크립트를 차단할 수 있습니다. 해결:
-
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-```
-
-### `claude: The term 'claude' is not recognized`
-
-Claude Code가 전역 설치되어 있고 PATH에 있는지 확인:
-
-```powershell
-npm i -g @anthropic-ai/claude-code
-claude --version
-```
-
-### 프로필 스크립트가 로드되지 않음
-
-프로필 경로와 통합 라인이 존재하는지 확인:
-
-```powershell
-echo $PROFILE
-Get-Content $PROFILE | Select-String "shell-integration"
-```
+[셸 동작·훅](/ko/guide/shell-integration) · [이관·MCP·업데이트](/ko/guide/commands)

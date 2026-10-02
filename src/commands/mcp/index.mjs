@@ -1,54 +1,27 @@
-import { color, error } from '../../lib/ui.mjs';
-import { runTui } from './tui.mjs';
-import { add, remove, disable, enable } from './cli.mjs';
+import { join } from 'node:path';
+import { PROFILES_DIR, SHARED_DIR } from '../../lib/constants.mjs';
+import { readMeta } from '../../lib/config.mjs';
+import { readJsonFile } from '../../lib/json-fs.mjs';
+import { info, error } from '../../lib/ui.mjs';
 
-const SUBCOMMANDS = { add, remove, disable, enable };
-
-export async function mcp(argv = []) {
-  const sub = argv[0];
-
-  if (!sub || sub === 'list') {
-    return runTui();
+export async function mcp(args = []) {
+  if (args.length > 1 || (args[0] && args[0] !== 'list')) {
+    error('MCP writes are no longer supported here. Use claude mcp add/remove and /mcp.');
+    process.exitCode = 1;
+    return;
   }
-
-  const handler = SUBCOMMANDS[sub];
-  if (!handler) {
-    error(`Unknown mcp subcommand: ${sub}`);
-    printMcpHelp();
-    process.exit(1);
+  info('Legacy MCP data is preserved. Register servers using claude mcp for the selected profile.');
+  const files = [join(SHARED_DIR, 'settings.json'),
+    ...readMeta().profiles.map(name => join(PROFILES_DIR, name, 'settings.local.json'))];
+  for (const file of files) {
+    const data = readJsonFile(file);
+    const names = Object.keys(data.mcpServers ?? {});
+    const disabled = Array.isArray(data.disabledMcpServers) ? data.disabledMcpServers : [];
+    if (names.length || disabled.length) {
+      console.log(`${file}: ${names.join(', ') || '(no servers)'}`);
+      if (disabled.length) console.log(`  Legacy disabled: ${disabled.join(', ')}`);
+    }
   }
-
-  await handler(argv.slice(1));
-}
-
-function printMcpHelp() {
-  console.log(`
-  ${color.bold('mcp')} — Manage MCP servers
-
-  ${color.bold('Usage:')}
-    claude-account-switch mcp [subcommand] [options]
-
-  ${color.bold('Subcommands:')}
-    (none)                  Launch interactive TUI
-    list                    Launch interactive TUI
-    add <name> [options]    Add an MCP server
-    remove <name> [options] Remove an MCP server
-    disable <name>          Disable a shared MCP for a specific profile
-    enable <name>           Re-enable a previously disabled shared MCP
-
-  ${color.bold('Add Options:')}
-    --shared                Add to all profiles (shared)
-    --profile <name>        Add to a specific profile only
-    --type http|stdio       MCP type (default: stdio)
-    --url <url>             HTTP MCP URL
-    --command <cmd>         stdio MCP command
-    --args <arg>...         stdio MCP arguments
-
-  ${color.bold('Remove Options:')}
-    --shared                Remove from shared scope
-    --profile <name>        Remove from a specific profile
-
-  ${color.bold('Disable/Enable Options:')}
-    --profile <name>        Target profile (required)
-`);
+  info('User servers belong in the profile .claude.json; project servers belong in .mcp.json.');
+  info('See https://code.claude.com/docs/en/mcp');
 }

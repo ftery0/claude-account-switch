@@ -1,150 +1,78 @@
 # Claude Switch PowerShell integration
-# Auto-generated — do not edit manually
 
-$script:__CLAUDE_PROFILES_DIR = "$env:USERPROFILE\.claude-profiles"
-$script:__CLAUDE_META_FILE    = "$script:__CLAUDE_PROFILES_DIR\meta.json"
-
-# Cache the real claude binary path *before* our function shadows the name.
-# Get-Command with -CommandType Application bypasses functions/aliases.
-$__cas_cmd = Get-Command claude -CommandType Application -ErrorAction SilentlyContinue
-$script:__claude_bin = if ($__cas_cmd) { $__cas_cmd.Source } else { $null }
-Remove-Variable __cas_cmd -ErrorAction SilentlyContinue
-
-function __claude_switch_active {
-  if (Test-Path $script:__CLAUDE_META_FILE) {
-    try {
-      (Get-Content $script:__CLAUDE_META_FILE -Raw | ConvertFrom-Json).activeProfile
-    } catch { $null }
+function __claude_switch_cli {
+  $profileHome = $env:USERPROFILE
+  if (!$profileHome) { $profileHome = $env:HOME }
+  $runtime = Join-Path $profileHome '.claude-profiles/_runtime/bin/cli.mjs'
+  $node = Get-Command node -CommandType Application -ErrorAction SilentlyContinue
+  if (!(Test-Path $runtime) -or !$node) {
+    $global:LASTEXITCODE = 127
+    Write-Error 'Shell runtime unavailable. Run: npx claude-account-switch@latest install-shell' -ErrorAction Continue
+    return
   }
-}
-
-function __claude_switch_profiles {
-  if (Test-Path $script:__CLAUDE_PROFILES_DIR) {
-    Get-ChildItem -Path $script:__CLAUDE_PROFILES_DIR -Directory |
-      Where-Object { $_.Name -notlike '_*' } |
-      Select-Object -ExpandProperty Name
+  $hadTransport = Test-Path Env:CLAUDE_SWITCH_ARGV
+  $previousTransport = $env:CLAUDE_SWITCH_ARGV
+  $previousEncoding = [Console]::OutputEncoding
+  $exitCode = 1
+  try {
+    $payload = ConvertTo-Json -Compress -Depth 3 -InputObject @{
+      runtime = $runtime
+      args = @($args)
+      previous = $previousTransport
+    }
+    $env:CLAUDE_SWITCH_ARGV = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($payload))
+    $bootstrap = @'
+const payload = JSON.parse(Buffer.from(process.env.CLAUDE_SWITCH_ARGV, 'base64').toString('utf8'));
+if (payload.previous === null) delete process.env.CLAUDE_SWITCH_ARGV;
+else process.env.CLAUDE_SWITCH_ARGV = payload.previous;
+process.argv = [process.execPath, payload.runtime, ...payload.args];
+await import((await import('node:url')).pathToFileURL(payload.runtime).href);
+'@
+    $ErrorActionPreference = 'Continue'
+    $PSNativeCommandUseErrorActionPreference = $false
+    [Console]::OutputEncoding = [Text.Encoding]::UTF8
+    & $node.Source --input-type=module --eval $bootstrap
+    $exitCode = $LASTEXITCODE
+  } finally {
+    [Console]::OutputEncoding = $previousEncoding
+    if ($hadTransport) { $env:CLAUDE_SWITCH_ARGV = $previousTransport }
+    else { Remove-Item Env:CLAUDE_SWITCH_ARGV -ErrorAction SilentlyContinue }
+    $global:LASTEXITCODE = $exitCode
   }
 }
 
 function __claude_switch_launch {
-  param([string]$Profile, [string[]]$Remaining)
-  $configFile = "$script:__CLAUDE_PROFILES_DIR\$Profile\.claude.json"
-  if (Test-Path $configFile) {
-    Write-Host "[claude-account-switch] Profile: $Profile" -ForegroundColor Cyan
-  } else {
-    Write-Host "[claude-account-switch] Profile: $Profile (not logged in — login will start)" -ForegroundColor Cyan
-  }
-  $env:CLAUDE_CONFIG_DIR = "$script:__CLAUDE_PROFILES_DIR\$Profile"
+  $profile = $args[0]
+  $forwarded = @($args | Select-Object -Skip 1)
+  $profileHome = $env:USERPROFILE
+  if (!$profileHome) { $profileHome = $env:HOME }
+  $hook = Join-Path $profileHome ".claude-profiles/$profile/pre-launch.ps1"
+  $saved = @{}
+  Get-ChildItem Env: | ForEach-Object { $saved[$_.Name] = $_.Value }
   try {
-    if ($script:__claude_bin) {
-      & $script:__claude_bin @Remaining
-    } else {
-      Write-Error "claude binary not found. Please ensure Claude Code is installed and in your PATH."
+    if (Test-Path $hook) {
+      $ErrorActionPreference = 'Stop'
+      $global:LASTEXITCODE = 0
+      . $hook
+      if (!$? -or $LASTEXITCODE -ne 0) { return }
     }
+    __claude_switch_cli shell launch --profile $profile '--' @forwarded
+  } catch {
+    if (!$LASTEXITCODE) { $global:LASTEXITCODE = 1 }
+    Write-Error $_ -ErrorAction Continue
   } finally {
-    Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue
+    Get-ChildItem Env: | ForEach-Object {
+      if (!$saved.ContainsKey($_.Name)) { Remove-Item "Env:$($_.Name)" }
+    }
+    foreach ($name in $saved.Keys) { Set-Item "Env:$name" $saved[$name] }
   }
 }
 
 function claude {
-  $profiles = @(__claude_switch_profiles)
-  if ($profiles.Count -eq 0) {
-    Write-Error "No claude-account-switch profiles found. Run: npx claude-account-switch init"
-    return
-  }
-
-  # Single profile — skip picker
-  if ($profiles.Count -eq 1) {
-    __claude_switch_launch -Profile $profiles[0] -Remaining $args
-    return
-  }
-
-  $current = __claude_switch_active
-  Write-Host ""
-  Write-Host "[claude-account-switch] Select a profile:" -ForegroundColor Cyan
-  Write-Host ""
-
-  for ($i = 0; $i -lt $profiles.Count; $i++) {
-    $p = $profiles[$i]
-    $marker = if ($p -eq $current) { ">" } else { " " }
-    $loginStatus = if (!(Test-Path "$script:__CLAUDE_PROFILES_DIR\$p\.claude.json")) { " (not logged in)" } else { "" }
-    if ($p -eq $current) {
-      Write-Host "  $marker $($i + 1)) $p$loginStatus" -ForegroundColor Green
-    } else {
-      Write-Host "  $marker $($i + 1)) $p$loginStatus"
-    }
-  }
-
-  Write-Host ""
-  $hint    = if ($current) { " (default: $current)" } else { "" }
-  $choice  = Read-Host "  Enter number$hint"
-
-  $selected = $null
-  if ([string]::IsNullOrEmpty($choice)) {
-    $selected = $current
-  } elseif ($choice -match '^\d+$') {
-    $idx = [int]$choice - 1
-    if ($idx -ge 0 -and $idx -lt $profiles.Count) {
-      $selected = $profiles[$idx]
-    }
-  }
-
-  if ($null -eq $selected) {
-    Write-Error "Invalid selection"
-    return
-  }
-
-  if ($selected -ne $current) {
-    cpf $selected | Out-Null
-  }
-
-  Write-Host ""
-  __claude_switch_launch -Profile $selected -Remaining $args
+  $selected = __claude_switch_cli shell pick --print
+  if ($LASTEXITCODE -ne 0 -or !$selected) { return }
+  __claude_switch_launch $selected @args
 }
 
-function cpf {
-  param([string]$Name)
-  if ([string]::IsNullOrEmpty($Name)) {
-    Write-Error "Usage: cpf <profile-name>"
-    return
-  }
-  if (!(Test-Path "$script:__CLAUDE_PROFILES_DIR\$Name")) {
-    Write-Error "Profile `"$Name`" not found"
-    return
-  }
-  try {
-    $meta = Get-Content $script:__CLAUDE_META_FILE -Raw | ConvertFrom-Json
-    $meta.activeProfile = $Name
-    $json = $meta | ConvertTo-Json -Depth 10
-    [IO.File]::WriteAllText($script:__CLAUDE_META_FILE, $json)
-    Write-Host "Switched to profile: $Name"
-  } catch {
-    Write-Error "Failed to update profile: $_"
-  }
-}
-
-function claude-pick {
-  $profiles = @(__claude_switch_profiles)
-  if ($profiles.Count -eq 0) {
-    Write-Error "No profiles found. Run: npx claude-account-switch init"
-    return
-  }
-  $current = __claude_switch_active
-  Write-Host "Select a profile:"
-  for ($i = 0; $i -lt $profiles.Count; $i++) {
-    $p      = $profiles[$i]
-    $marker = if ($p -eq $current) { " *" } else { "" }
-    Write-Host "  $($i + 1)) $p$marker"
-  }
-  $choice = Read-Host "Enter number"
-  if ($choice -match '^\d+$') {
-    $idx = [int]$choice - 1
-    if ($idx -ge 0 -and $idx -lt $profiles.Count) {
-      cpf $profiles[$idx]
-    } else {
-      Write-Error "Invalid selection"
-    }
-  } else {
-    Write-Error "Invalid selection"
-  }
-}
+function cpf { __claude_switch_cli shell use @args }
+function claude-pick { __claude_switch_cli shell pick }

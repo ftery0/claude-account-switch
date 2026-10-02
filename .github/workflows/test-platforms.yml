@@ -1,0 +1,200 @@
+name: Test Platforms
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ['18', '20', '22', '24', '26']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - name: Test on Unix
+        if: runner.os != 'Windows'
+        run: npm test
+      - name: Test through Windows CMD
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: npm test
+      - name: Check package contents
+        if: always()
+        run: npm pack --dry-run --ignore-scripts
+
+  shells:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            shell: /bin/bash
+          - os: ubuntu-latest
+            shell: /bin/zsh
+          - os: ubuntu-latest
+            shell: /usr/bin/fish
+          - os: macos-latest
+            shell: /bin/bash
+          - os: macos-latest
+            shell: /bin/zsh
+          - os: windows-latest
+            shell: powershell.exe
+          - os: windows-latest
+            shell: pwsh.exe
+          - os: windows-latest
+            shell: cmd.exe
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install Linux shells
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zsh fish
+      - name: Run isolated shell checks
+        run: node test/cross-shell-smoke.mjs --shell=${{ matrix.shell }}
+      - name: Check PowerShell Standard argument passing
+        if: always() && matrix.shell == 'pwsh.exe'
+        run: node test/cross-shell-smoke.mjs --shell=pwsh.exe --ps-mode=Standard
+      - name: Check PowerShell Legacy argument passing
+        if: always() && matrix.shell == 'pwsh.exe'
+        run: node test/cross-shell-smoke.mjs --shell=pwsh.exe --ps-mode=Legacy
+
+  declared-minimum:
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['18.19.0', '20.10.0']
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - name: Test on the declared minimum Node
+        run: npm test
+
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - run: npm run docs:build
+
+  wsl:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Test in an isolated WSL1 distribution
+        shell: pwsh
+        run: |
+          $PSNativeCommandArgumentPassing = 'Standard'
+          $distro = 'CAS-WSL1'
+          $imageName = 'ubuntu-jammy-wsl-amd64-ubuntu22.04lts.rootfs.tar.gz'
+          $imageBase = 'https://cloud-images.ubuntu.com/wsl/jammy/current/'
+          $compressedImage = Join-Path $env:RUNNER_TEMP $imageName
+          $tarImage = Join-Path $env:RUNNER_TEMP 'cas-rootfs.tar'
+          Invoke-WebRequest ($imageBase + $imageName) -OutFile $compressedImage
+          $sums = Invoke-RestMethod ($imageBase + 'SHA256SUMS')
+          $line = @($sums -split "`n" | Where-Object { $_.TrimEnd().EndsWith($imageName) })
+          if ($line.Count -ne 1) { throw 'WSL image checksum entry missing' }
+          $expected = ($line[0] -split '\s+')[0]
+          if ((Get-FileHash $compressedImage -Algorithm SHA256).Hash -ne $expected) { throw 'WSL image checksum mismatch' }
+          $compressedStream = [IO.File]::OpenRead($compressedImage)
+          try {
+            $tarStream = [IO.File]::Create($tarImage)
+            try {
+              $decompressor = [IO.Compression.GZipStream]::new($compressedStream, [IO.Compression.CompressionMode]::Decompress)
+              try { $decompressor.CopyTo($tarStream) } finally { $decompressor.Dispose() }
+            } finally { $tarStream.Dispose() }
+          } finally { $compressedStream.Dispose() }
+          $sourceArchive = Join-Path $env:RUNNER_TEMP 'cas-source.tar'
+          git archive --format=tar --output=$sourceArchive HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Could not archive the checkout' }
+          $nodeVersion = node -p 'process.versions.node'
+          if ($LASTEXITCODE -ne 0 -or $nodeVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Node version unavailable' }
+          $registered = $false
+          try {
+            wsl.exe --import $distro (Join-Path $env:RUNNER_TEMP 'cas-wsl') $tarImage --version 1
+            if ($LASTEXITCODE -ne 0) { throw 'WSL1 import failed' }
+            $registered = $true
+            $sourceUnix = wsl.exe -d $distro -u root --exec wslpath -u $sourceArchive
+            if ($LASTEXITCODE -ne 0) { throw 'Could not translate the source path' }
+            $script = @'
+          set -eu
+          source_archive="$1"
+          node_version="$2"
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y ca-certificates curl libstdc++6 zsh fish
+          node_archive="node-v${node_version}-linux-x64.tar.gz"
+          curl -fsSL --retry 2 "https://nodejs.org/dist/v${node_version}/${node_archive}" -o "/tmp/${node_archive}"
+          curl -fsSL --retry 2 "https://nodejs.org/dist/v${node_version}/SHASUMS256.txt" -o /tmp/node-shasums
+          cd /tmp
+          awk -v name="$node_archive" '$2 == name { print }' node-shasums > node-checksum
+          sha256sum --check node-checksum
+          tar -xzf "$node_archive"
+          mkdir -p /tmp/cas-source /tmp/cas-home /tmp/cas-temp /tmp/cas-cache
+          tar -xf "$source_archive" -C /tmp/cas-source
+          touch /tmp/cas-npmrc /tmp/cas-npmrc-global /tmp/cas-gitconfig
+          cd /tmp/cas-source
+          env -i PATH="/tmp/node-v${node_version}-linux-x64/bin:/usr/bin:/bin" \
+            HOME=/tmp/cas-home USERPROFILE=/tmp/cas-home TMPDIR=/tmp/cas-temp \
+            npm_config_offline=true npm_config_cache=/tmp/cas-cache \
+            npm_config_userconfig=/tmp/cas-npmrc npm_config_globalconfig=/tmp/cas-npmrc-global \
+            GIT_CONFIG_GLOBAL=/tmp/cas-gitconfig GIT_CONFIG_NOSYSTEM=1 \
+            LANG=C.UTF-8 NO_COLOR=1 bash -c '
+              node --version
+              check_status=0
+              npm test || check_status=1
+              for target_shell in /bin/bash /bin/zsh /usr/bin/fish; do
+                node test/cross-shell-smoke.mjs --shell="$target_shell" || check_status=1
+              done
+              exit "$check_status"
+            '
+          '@
+            $script = $script.Replace("`r`n", "`n")
+            wsl.exe -d $distro -u root --exec bash -c $script -- ([string]$sourceUnix).Trim() $nodeVersion
+            if ($LASTEXITCODE -ne 0) { throw 'WSL verification failed' }
+          } finally {
+            if ($registered) {
+              wsl.exe --unregister $distro
+              if ($LASTEXITCODE -ne 0) { throw 'WSL test distribution cleanup failed' }
+            }
+          }

@@ -1,371 +1,338 @@
-import { describe, it, before, after } from 'node:test';
+import './helpers/home.mjs';
+import { describe, it, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  existsSync, readFileSync, writeFileSync, mkdirSync,
-  copyFileSync, unlinkSync, rmSync, lstatSync, readdirSync,
+import fs, {
+  existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, lstatSync,
+  readdirSync, readlinkSync, symlinkSync, statSync, realpathSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { syncBuiltinESMExports } from 'node:module';
+import { join, basename } from 'node:path';
+import {
+  HOME, PROFILES_DIR, SHARED_DIR, PROFILE_FILES, PROFILE_DIRS, SHARED_FILES, SHARED_DIRS,
+} from '../src/lib/constants.mjs';
+import {
+  createProfile, ensureShared, profileDir, profileExists, removeProfile,
+  listProfiles, migrateDir, migrationSource,
+} from '../src/lib/profile.mjs';
+import { readMeta, writeMeta } from '../src/lib/config.mjs';
 
-// ─── Helpers: backup/restore meta.json & cleanup test profiles ──────────────
+const source = join(HOME, 'source');
 
-const TEST_PROFILE = `zztest${Date.now()}`;
-const TEST_PROFILE2 = `zztest2${Date.now()}`;
-let PROFILES_DIR, SHARED_DIR, META_FILE;
-let backupPath;
-let hadOriginal = false;
-
-async function setup() {
-  const constants = await import('../src/lib/constants.mjs');
-  PROFILES_DIR = constants.PROFILES_DIR;
-  SHARED_DIR = constants.SHARED_DIR;
-  META_FILE = constants.META_FILE;
-  backupPath = META_FILE + '.profile-ops-backup';
-  mkdirSync(PROFILES_DIR, { recursive: true });
-  if (existsSync(META_FILE)) {
-    copyFileSync(META_FILE, backupPath);
-    hadOriginal = true;
-  }
-  // Start fresh
-  writeFileSync(META_FILE, JSON.stringify({
-    version: 1, activeProfile: null, shareSettings: true, profiles: [],
-  }, null, 2));
+function write(path, value) {
+  mkdirSync(join(path, '..'), { recursive: true });
+  writeFileSync(path, value);
 }
 
-function restore() {
-  // Remove test profiles
-  for (const p of [TEST_PROFILE, TEST_PROFILE2]) {
-    const dir = join(PROFILES_DIR, p);
-    if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
-  }
-  // Restore meta
-  if (hadOriginal) {
-    copyFileSync(backupPath, META_FILE);
-    unlinkSync(backupPath);
-  } else if (existsSync(META_FILE)) {
-    unlinkSync(META_FILE);
-  }
+function snapshot(path) {
+  if (!existsSync(path)) return null;
+  const info = lstatSync(path);
+  if (info.isSymbolicLink()) return { link: readlinkSync(path) };
+  if (info.isFile()) return readFileSync(path, 'utf8');
+  return Object.fromEntries(readdirSync(path).sort().map(entry => [entry, snapshot(join(path, entry))]));
 }
 
-// ─── profileDir / profileExists ──────────────────────────────────────────────
+beforeEach(() => {
+  for (const entry of readdirSync(HOME)) rmSync(join(HOME, entry), { recursive: true, force: true });
+  delete process.env.CLAUDE_CONFIG_DIR;
+  mkdirSync(source);
+});
 
-describe('profileDir & profileExists', async () => {
-  const { profileDir, profileExists } = await import('../src/lib/profile.mjs');
-
-  it('profileDir returns path under PROFILES_DIR', async () => {
-    const { PROFILES_DIR: pd } = await import('../src/lib/constants.mjs');
-    const result = profileDir('test');
-    assert.equal(result, join(pd, 'test'));
+describe('profile operations', () => {
+  it('creates shared placeholders and preserves existing settings', () => {
+    ensureShared();
+    for (const file of SHARED_FILES) assert.equal(readFileSync(join(SHARED_DIR, file), 'utf8'), '{}');
+    for (const entry of SHARED_DIRS) assert.ok(statSync(join(SHARED_DIR, entry)).isDirectory());
+    write(join(SHARED_DIR, 'settings.json'), '{"theme":"dark"}');
+    ensureShared();
+    assert.equal(readFileSync(join(SHARED_DIR, 'settings.json'), 'utf8'), '{"theme":"dark"}');
   });
 
-  it('profileExists returns false for nonexistent profile', () => {
-    assert.equal(profileExists('surely-does-not-exist-' + Date.now()), false);
+  it('creates linked shared settings and private account directories', () => {
+    createProfile('work');
+    assert.equal(profileDir('work'), join(PROFILES_DIR, 'work'));
+    assert.equal(profileExists('work'), true);
+    for (const entry of [...SHARED_FILES, ...SHARED_DIRS]) assert.ok(existsSync(join(profileDir('work'), entry)));
+    for (const entry of PROFILE_DIRS) assert.ok(statSync(join(profileDir('work'), entry)).isDirectory());
+    assert.deepEqual(listProfiles(), ['work']);
+    const before = snapshot(PROFILES_DIR);
+    createProfile('work');
+    assert.deepEqual(snapshot(PROFILES_DIR), before);
+  });
+
+  it('creates independent profiles without shared links', () => {
+    createProfile('personal', false);
+    for (const entry of [...SHARED_FILES, ...SHARED_DIRS]) assert.equal(existsSync(join(profileDir('personal'), entry)), false);
+    assert.equal(existsSync(SHARED_DIR), false);
+    for (const entry of PROFILE_DIRS) assert.ok(existsSync(join(profileDir('personal'), entry)));
+  });
+
+  it('removes a selected profile and chooses the next active profile', () => {
+    createProfile('work', false);
+    createProfile('personal', false);
+    writeMeta({ ...readMeta(), activeProfile: 'work' });
+    removeProfile('work');
+    assert.equal(profileExists('work'), false);
+    assert.deepEqual(listProfiles(), ['personal']);
+    assert.equal(readMeta().activeProfile, 'personal');
+    assert.doesNotThrow(() => removeProfile('missing'));
+  });
+
+  it('rejects invalid profile names before creating files', () => {
+    assert.throws(() => createProfile('../outside'), /lowercase/);
+    assert.equal(existsSync(PROFILES_DIR), false);
   });
 });
 
-// ─── ensureShared ────────────────────────────────────────────────────────────
-
-describe('ensureShared', async () => {
-  const { ensureShared } = await import('../src/lib/profile.mjs');
-  const { SHARED_DIR: sd, SHARED_FILES, SHARED_DIRS } = await import('../src/lib/constants.mjs');
-
-  before(async () => { await setup(); });
-  after(restore);
-
-  it('creates _shared directory', () => {
-    ensureShared();
-    assert.ok(existsSync(sd));
-  });
-
-  it('creates shared files with empty JSON when they do not exist', () => {
-    // Remove shared files to test creation from scratch
-    for (const f of SHARED_FILES) {
-      const p = join(sd, f);
-      if (existsSync(p)) unlinkSync(p);
+describe('migration data preservation', () => {
+  it('copies user data and shares only settings and commands', () => {
+    for (const file of PROFILE_FILES) write(join(source, file), file.endsWith('.json') ? '{"saved":true}' : '# user rules');
+    for (const entry of PROFILE_DIRS) write(join(source, entry, 'saved.txt'), entry);
+    write(join(source, 'settings.json'), '{"theme":"dark"}');
+    write(join(source, 'commands', 'custom.md'), '# command');
+    const original = snapshot(source);
+    migrateDir(source, 'work');
+    for (const file of PROFILE_FILES) assert.equal(readFileSync(join(profileDir('work'), file), 'utf8'), original[file]);
+    for (const entry of PROFILE_DIRS) {
+      assert.equal(readFileSync(join(profileDir('work'), entry, 'saved.txt'), 'utf8'), entry);
+      assert.equal(lstatSync(join(profileDir('work'), entry)).isSymbolicLink(), false);
     }
-    ensureShared();
-    for (const f of SHARED_FILES) {
-      const p = join(sd, f);
-      assert.ok(existsSync(p), `${f} should exist`);
-      assert.equal(readFileSync(p, 'utf8'), '{}');
+    assert.equal(readFileSync(join(SHARED_DIR, 'settings.json'), 'utf8'), '{"theme":"dark"}');
+    assert.equal(readFileSync(join(SHARED_DIR, 'commands', 'custom.md'), 'utf8'), '# command');
+    assert.deepEqual(snapshot(source), original);
+    assert.deepEqual(listProfiles(), ['work']);
+    if (process.platform !== 'win32') {
+      for (const file of ['.claude.json', '.credentials.json']) assert.equal(statSync(join(profileDir('work'), file)).mode & 0o777, 0o600);
     }
   });
 
-  it('creates shared directories', () => {
-    ensureShared();
-    for (const d of SHARED_DIRS) {
-      assert.ok(existsSync(join(sd, d)), `${d}/ should exist`);
-    }
+  it('copies independent settings and allows missing optional data', () => {
+    write(join(source, 'settings.json'), '{"direct":true}');
+    migrateDir(source, 'work', false);
+    assert.equal(readFileSync(join(profileDir('work'), 'settings.json'), 'utf8'), '{"direct":true}');
+    assert.equal(existsSync(SHARED_DIR), false);
+    assert.doesNotThrow(() => migrateDir(source, 'work', false));
   });
 
-  it('is idempotent — does not overwrite existing shared files', () => {
-    ensureShared();
-    const settingsPath = join(sd, 'settings.json');
-    writeFileSync(settingsPath, '{"theme":"dark"}');
-    ensureShared(); // should NOT overwrite
-    assert.equal(readFileSync(settingsPath, 'utf8'), '{"theme":"dark"}');
-  });
-});
-
-// ─── createProfile ───────────────────────────────────────────────────────────
-
-describe('createProfile', async () => {
-  const { createProfile, profileDir, profileExists } = await import('../src/lib/profile.mjs');
-  const { readMeta } = await import('../src/lib/config.mjs');
-  const { PROFILE_DIRS, SHARED_FILES, SHARED_DIRS } = await import('../src/lib/constants.mjs');
-
-  before(async () => { await setup(); });
-  after(restore);
-
-  it('creates profile directory', () => {
-    createProfile(TEST_PROFILE, true);
-    assert.ok(existsSync(profileDir(TEST_PROFILE)));
+  it('seeds an empty history file without sharing or erasing another account history', () => {
+    createProfile('work');
+    createProfile('personal');
+    write(join(profileDir('work'), 'history.jsonl'), '');
+    write(join(profileDir('personal'), 'history.jsonl'), '{"display":"personal fixture"}\n');
+    write(join(source, 'history.jsonl'), '{"display":"work fixture"}\n');
+    migrateDir(source, 'work');
+    assert.equal(readFileSync(join(profileDir('work'), 'history.jsonl'), 'utf8'), '{"display":"work fixture"}\n');
+    assert.equal(readFileSync(join(profileDir('personal'), 'history.jsonl'), 'utf8'), '{"display":"personal fixture"}\n');
+    assert.equal(existsSync(join(SHARED_DIR, 'history.jsonl')), false);
   });
 
-  it('creates subdirectories (plugins, projects, plans)', () => {
-    for (const d of PROFILE_DIRS) {
-      assert.ok(existsSync(join(profileDir(TEST_PROFILE), d)),
-        `${d}/ should be created`);
-    }
+  it('seeds an empty shared destination and permits identical repeated migration', () => {
+    createProfile('work');
+    write(join(source, '.claude.json'), '{"account":"work"}');
+    write(join(source, 'settings.json'), '{"theme":"dark"}');
+    write(join(source, 'commands', 'custom.md'), '# command');
+    migrateDir(source, 'work');
+    const before = snapshot(PROFILES_DIR);
+    migrateDir(source, 'work');
+    assert.deepEqual(snapshot(PROFILES_DIR), before);
   });
 
-  it('adds profile to meta.json', () => {
-    const meta = readMeta();
-    assert.ok(meta.profiles.includes(TEST_PROFILE));
+  it('accepts source links to identical existing shared settings and commands', { skip: process.platform === 'win32' }, () => {
+    createProfile('work');
+    write(join(SHARED_DIR, 'settings.json'), '{"theme":"shared"}');
+    write(join(SHARED_DIR, 'commands', 'custom.md'), '# shared command');
+    symlinkSync(join(SHARED_DIR, 'settings.json'), join(source, 'settings.json'));
+    symlinkSync(join(SHARED_DIR, 'commands'), join(source, 'commands'));
+    migrateDir(source, 'personal');
+    assert.equal(readFileSync(join(profileDir('personal'), 'settings.json'), 'utf8'), '{"theme":"shared"}');
+    assert.equal(readFileSync(join(profileDir('personal'), 'commands', 'custom.md'), 'utf8'), '# shared command');
   });
 
-  it('creates links/copies for shared files when shareSettings=true', () => {
-    for (const f of SHARED_FILES) {
-      const p = join(profileDir(TEST_PROFILE), f);
-      assert.ok(existsSync(p), `shared file link ${f} should exist`);
-    }
+  it('accepts a source directory link or Windows junction to existing shared commands', () => {
+    createProfile('work');
+    write(join(SHARED_DIR, 'commands', 'custom.md'), '# shared command');
+    symlinkSync(join(SHARED_DIR, 'commands'), join(source, 'commands'), process.platform === 'win32' ? 'junction' : 'dir');
+    const original = snapshot(source);
+    migrateDir(source, 'personal');
+    assert.equal(readFileSync(join(profileDir('personal'), 'commands', 'custom.md'), 'utf8'), '# shared command');
+    assert.deepEqual(snapshot(source), original);
   });
 
-  it('creates links for shared dirs when shareSettings=true', () => {
-    for (const d of SHARED_DIRS) {
-      const p = join(profileDir(TEST_PROFILE), d);
-      assert.ok(existsSync(p), `shared dir link ${d} should exist`);
-    }
+  it('does not replace populated shared data from another account', () => {
+    createProfile('work');
+    write(join(SHARED_DIR, 'settings.json'), '{"theme":"work"}');
+    write(join(source, '.claude.json'), '{"account":"personal"}');
+    write(join(source, 'settings.json'), '{"theme":"personal"}');
+    const before = snapshot(PROFILES_DIR);
+    assert.throws(() => migrateDir(source, 'personal'), /Migration conflict/);
+    assert.deepEqual(snapshot(PROFILES_DIR), before);
+    assert.equal(profileExists('personal'), false);
   });
 
-  it('profileExists returns true after creation', () => {
-    assert.equal(profileExists(TEST_PROFILE), true);
+  it('does not merge different populated shared command directories', () => {
+    createProfile('work');
+    write(join(SHARED_DIR, 'commands', 'work.md'), 'work');
+    write(join(source, 'commands', 'personal.md'), 'personal');
+    const before = snapshot(PROFILES_DIR);
+    assert.throws(() => migrateDir(source, 'personal'), /Migration conflict/);
+    assert.deepEqual(snapshot(PROFILES_DIR), before);
   });
 
-  it('with shareSettings=false does not create shared links', () => {
-    createProfile(TEST_PROFILE2, false);
-    for (const f of SHARED_FILES) {
-      const p = join(profileDir(TEST_PROFILE2), f);
-      // Should NOT exist (no symlink/copy created)
-      assert.equal(existsSync(p), false, `${f} should NOT be linked when shareSettings=false`);
-    }
+  it('empty shared settings cannot erase existing settings', () => {
+    createProfile('work');
+    write(join(SHARED_DIR, 'settings.json'), '{"theme":"dark"}');
+    write(join(source, 'settings.json'), '{}');
+    migrateDir(source, 'personal');
+    assert.equal(readFileSync(join(SHARED_DIR, 'settings.json'), 'utf8'), '{"theme":"dark"}');
   });
 
-  it('with shareSettings=false still creates subdirectories', () => {
-    for (const d of PROFILE_DIRS) {
-      assert.ok(existsSync(join(profileDir(TEST_PROFILE2), d)));
-    }
+  it('rejects different profile credentials and preserves all previous data', () => {
+    createProfile('work');
+    write(join(profileDir('work'), '.claude.json'), '{"account":"original"}');
+    write(join(source, '.claude.json'), '{"account":"different"}');
+    const before = snapshot(PROFILES_DIR);
+    assert.throws(() => migrateDir(source, 'work'), /Migration conflict/);
+    assert.deepEqual(snapshot(PROFILES_DIR), before);
   });
 
-  it('is idempotent — calling twice does not error', () => {
-    assert.doesNotThrow(() => createProfile(TEST_PROFILE, true));
-  });
-});
-
-// ─── removeProfile ───────────────────────────────────────────────────────────
-
-describe('removeProfile', async () => {
-  const { createProfile, removeProfile, profileDir, profileExists } = await import('../src/lib/profile.mjs');
-  const { readMeta, writeMeta } = await import('../src/lib/config.mjs');
-
-  before(async () => { await setup(); });
-  after(restore);
-
-  it('removes profile directory', () => {
-    createProfile(TEST_PROFILE, false);
-    assert.ok(existsSync(profileDir(TEST_PROFILE)));
-    removeProfile(TEST_PROFILE);
-    assert.equal(existsSync(profileDir(TEST_PROFILE)), false);
+  it('a late shared conflict leaves previously staged profile files unpublished', () => {
+    createProfile('work');
+    write(join(SHARED_DIR, 'commands', 'original.md'), 'original');
+    write(join(source, '.claude.json'), '{"account":"work"}');
+    write(join(source, 'skills', 'new', 'SKILL.md'), '# new skill');
+    write(join(source, 'commands', 'different.md'), 'different');
+    const before = snapshot(PROFILES_DIR);
+    assert.throws(() => migrateDir(source, 'work'), /Migration conflict/);
+    assert.deepEqual(snapshot(PROFILES_DIR), before);
   });
 
-  it('removes profile from meta.json', () => {
-    createProfile(TEST_PROFILE, false);
-    removeProfile(TEST_PROFILE);
-    const meta = readMeta();
-    assert.ok(!meta.profiles.includes(TEST_PROFILE));
+  it('invalid JSON stops migration without changing source, profile, or shared data', () => {
+    createProfile('work');
+    write(join(source, '.claude.json'), '{"account":"work"}');
+    write(join(source, 'settings.json'), '{broken');
+    const before = snapshot(PROFILES_DIR);
+    const original = snapshot(source);
+    assert.throws(() => migrateDir(source, 'work'), /Invalid JSON/);
+    assert.deepEqual(snapshot(PROFILES_DIR), before);
+    assert.deepEqual(snapshot(source), original);
   });
 
-  it('does not throw when profile directory is already gone', () => {
-    assert.doesNotThrow(() => removeProfile('nonexistent-' + Date.now()));
-  });
-
-  it('handles removing active profile (meta switches to next)', () => {
-    createProfile(TEST_PROFILE, false);
-    createProfile(TEST_PROFILE2, false);
-    writeMeta({
-      ...readMeta(),
-      activeProfile: TEST_PROFILE,
+  it('a copy failure leaves all existing data intact', () => {
+    createProfile('work');
+    write(join(source, '.claude.json'), '{"account":"work"}');
+    write(join(source, 'skills', 'broken', 'SKILL.md'), '# unreadable');
+    const before = snapshot(PROFILES_DIR);
+    const copy = fs.copyFileSync;
+    mock.method(fs, 'copyFileSync', (from, to, ...args) => {
+      if (from.endsWith('SKILL.md')) throw new Error('simulated copy failure');
+      return copy(from, to, ...args);
     });
-    removeProfile(TEST_PROFILE);
-    const meta = readMeta();
-    assert.equal(meta.activeProfile, TEST_PROFILE2);
-  });
-});
-
-// ─── listProfiles ────────────────────────────────────────────────────────────
-
-describe('listProfiles', async () => {
-  const { listProfiles, createProfile, removeProfile } = await import('../src/lib/profile.mjs');
-
-  before(async () => { await setup(); });
-  after(restore);
-
-  it('returns empty array when no profiles', () => {
-    const profiles = listProfiles();
-    assert.ok(Array.isArray(profiles));
-    // May have existing profiles from setup, so just check it's an array
-  });
-
-  it('returns profiles after creation', () => {
-    createProfile(TEST_PROFILE, false);
-    const profiles = listProfiles();
-    assert.ok(profiles.includes(TEST_PROFILE));
-  });
-
-  it('does not include removed profiles', () => {
-    createProfile(TEST_PROFILE, false);
-    removeProfile(TEST_PROFILE);
-    const profiles = listProfiles();
-    assert.ok(!profiles.includes(TEST_PROFILE));
-  });
-});
-
-// ─── migrateDir ──────────────────────────────────────────────────────────────
-
-describe('migrateDir', async () => {
-  const { migrateDir, profileDir, removeProfile } = await import('../src/lib/profile.mjs');
-  const { readMeta } = await import('../src/lib/config.mjs');
-  const { PROFILE_FILES, PROFILE_DIRS, SHARED_FILES, SHARED_DIRS } =
-    await import('../src/lib/constants.mjs');
-  const { tmpdir } = await import('node:os');
-
-  let sourceDir;
-
-  before(async () => {
-    await setup();
-    // Create a fake source directory simulating existing ~/.claude
-    sourceDir = join(tmpdir(), `claude-migrate-test-${Date.now()}`);
-    mkdirSync(sourceDir, { recursive: true });
-    // Create profile-specific files
-    writeFileSync(join(sourceDir, '.claude.json'), '{"oauth":"token123"}');
-    writeFileSync(join(sourceDir, 'settings.local.json'), '{"local":true}');
-    // Create profile-specific dirs with content
-    for (const d of PROFILE_DIRS) {
-      mkdirSync(join(sourceDir, d), { recursive: true });
-      writeFileSync(join(sourceDir, d, 'test.txt'), `content-${d}`);
+    syncBuiltinESMExports();
+    try {
+      assert.throws(() => migrateDir(source, 'work'), /simulated copy failure/);
+    } finally {
+      mock.restoreAll();
+      syncBuiltinESMExports();
     }
-    // Create shared files
-    writeFileSync(join(sourceDir, 'settings.json'), '{"theme":"monokai"}');
-    mkdirSync(join(sourceDir, 'commands'), { recursive: true });
-    writeFileSync(join(sourceDir, 'commands', 'custom.md'), '# custom command');
+    assert.deepEqual(snapshot(PROFILES_DIR), before);
+    assert.equal(readFileSync(join(source, 'skills', 'broken', 'SKILL.md'), 'utf8'), '# unreadable');
   });
 
-  after(() => {
-    rmSync(sourceDir, { recursive: true, force: true });
-    restore();
+  it('rolls back shared publication when profile publication fails', () => {
+    createProfile('work');
+    write(join(source, '.claude.json'), '{"account":"work"}');
+    write(join(source, 'settings.json'), '{"theme":"new"}');
+    const before = snapshot(PROFILES_DIR);
+    const rename = fs.renameSync;
+    mock.method(fs, 'renameSync', (from, to) => {
+      if (basename(from) === 'profile' && to === profileDir('work')) throw new Error('simulated publish failure');
+      return rename(from, to);
+    });
+    syncBuiltinESMExports();
+    try {
+      assert.throws(() => migrateDir(source, 'work'), /simulated publish failure/);
+    } finally {
+      mock.restoreAll();
+      syncBuiltinESMExports();
+    }
+    assert.deepEqual(snapshot(PROFILES_DIR), before);
   });
 
-  it('copies profile-specific files', () => {
-    migrateDir(sourceDir, TEST_PROFILE, true);
-    const dir = profileDir(TEST_PROFILE);
-    for (const f of PROFILE_FILES) {
-      if (existsSync(join(sourceDir, f))) {
-        assert.ok(existsSync(join(dir, f)), `${f} should be copied`);
+  it('preserves original backups if the filesystem also prevents rollback', () => {
+    createProfile('work');
+    write(join(profileDir('work'), 'CLAUDE.md'), '# original account instructions');
+    write(join(source, '.claude.json'), '{"account":"work"}');
+    write(join(source, 'settings.json'), '{"theme":"new"}');
+    const originalSettings = readFileSync(join(SHARED_DIR, 'settings.json'), 'utf8');
+    const rename = fs.renameSync;
+    mock.method(fs, 'renameSync', (from, to) => {
+      if (to === profileDir('work') && ['profile', 'backup-1'].includes(basename(from))) {
+        throw new Error('simulated destination unavailable');
       }
+      return rename(from, to);
+    });
+    syncBuiltinESMExports();
+    try {
+      assert.throws(() => migrateDir(source, 'work'), /Original backups were preserved/);
+    } finally {
+      mock.restoreAll();
+      syncBuiltinESMExports();
     }
+    const retained = readdirSync(PROFILES_DIR).find(entry => entry.startsWith('.migration-'));
+    assert.ok(retained);
+    assert.equal(readFileSync(join(PROFILES_DIR, retained, 'backup-1', 'CLAUDE.md'), 'utf8'), '# original account instructions');
+    assert.equal(readFileSync(join(SHARED_DIR, 'settings.json'), 'utf8'), originalSettings);
+    assert.equal(readFileSync(join(source, '.claude.json'), 'utf8'), '{"account":"work"}');
+  });
+});
+
+describe('migration source boundaries', () => {
+  it('reads the root user config when default directory is absent', () => {
+    write(join(HOME, '.claude.json'), '{"account":"default"}');
+    const defaultDir = join(HOME, '.claude');
+    assert.equal(migrationSource(defaultDir).userConfig, join(HOME, '.claude.json'));
+    migrateDir(defaultDir, 'work', false);
+    assert.equal(readFileSync(join(profileDir('work'), '.claude.json'), 'utf8'), '{"account":"default"}');
   });
 
-  it('copies .claude.json with correct content', () => {
-    const content = readFileSync(join(profileDir(TEST_PROFILE), '.claude.json'), 'utf8');
-    assert.equal(content, '{"oauth":"token123"}');
+  it('uses the configured directory config even when it is ~/.claude', () => {
+    const configured = join(HOME, '.claude');
+    process.env.CLAUDE_CONFIG_DIR = configured;
+    write(join(HOME, '.claude.json'), '{"account":"root"}');
+    write(join(configured, '.claude.json'), '{"account":"configured"}');
+    migrateDir(configured, 'work', false);
+    assert.equal(readFileSync(join(profileDir('work'), '.claude.json'), 'utf8'), '{"account":"configured"}');
   });
 
-  it('copies profile-specific directories recursively', () => {
-    const dir = profileDir(TEST_PROFILE);
-    for (const d of PROFILE_DIRS) {
-      assert.ok(existsSync(join(dir, d)), `${d}/ should be copied`);
-      assert.ok(existsSync(join(dir, d, 'test.txt')), `${d}/test.txt should exist`);
-    }
+  it('preserves actual targets of relative file and directory symlinks', { skip: process.platform === 'win32' }, () => {
+    write(join(HOME, 'external', 'SKILL.md'), '# linked skill');
+    write(join(HOME, 'global.md'), '# global rules');
+    mkdirSync(join(source, 'skills'));
+    symlinkSync('../../external', join(source, 'skills', 'linked'));
+    symlinkSync('../global.md', join(source, 'CLAUDE.md'));
+    migrateDir(source, 'work', false);
+    assert.equal(readlinkSync(join(profileDir('work'), 'skills', 'linked')), realpathSync(join(HOME, 'external')));
+    assert.equal(readlinkSync(join(profileDir('work'), 'CLAUDE.md')), realpathSync(join(HOME, 'global.md')));
+    assert.equal(readFileSync(join(profileDir('work'), 'skills', 'linked', 'SKILL.md'), 'utf8'), '# linked skill');
   });
 
-  it('copies non-empty shared files to _shared when shareSettings=true', () => {
-    // settings.json had content "{"theme":"monokai"}", so it should be in _shared
-    const sharedSettings = join(SHARED_DIR, 'settings.json');
-    const content = readFileSync(sharedSettings, 'utf8');
-    assert.equal(content, '{"theme":"monokai"}');
+  it('rejects source/target overlap including real symlink or junction aliases', () => {
+    createProfile('work', false);
+    const before = snapshot(PROFILES_DIR);
+    assert.throws(() => migrateDir(profileDir('work'), 'work', false), /overlap/);
+    assert.throws(() => migrateDir(HOME, 'work', false), /overlap/);
+    const nested = join(profileDir('work'), 'nested');
+    mkdirSync(nested);
+    assert.throws(() => migrateDir(nested, 'work', false), /overlap/);
+    rmSync(nested, { recursive: true });
+    symlinkSync(profileDir('work'), join(HOME, 'alias'), process.platform === 'win32' ? 'junction' : 'dir');
+    assert.throws(() => migrateDir(join(HOME, 'alias'), 'work', false), /overlap/);
+    assert.deepEqual(snapshot(PROFILES_DIR), before);
   });
 
-  it('copies shared directories to _shared', () => {
-    const sharedCommands = join(SHARED_DIR, 'commands', 'custom.md');
-    assert.ok(existsSync(sharedCommands));
-  });
-
-  it('creates links for shared files in profile', () => {
-    for (const f of SHARED_FILES) {
-      assert.ok(existsSync(join(profileDir(TEST_PROFILE), f)),
-        `shared link ${f} should exist`);
-    }
-  });
-
-  it('adds profile to meta.json', () => {
-    const meta = readMeta();
-    assert.ok(meta.profiles.includes(TEST_PROFILE));
-  });
-
-  it('does not copy empty shared files to _shared', () => {
-    // Create a source with empty settings.json
-    const src2 = join(tmpdir(), `claude-migrate-test2-${Date.now()}`);
-    mkdirSync(src2, { recursive: true });
-    writeFileSync(join(src2, '.claude.json'), '{}');
-    writeFileSync(join(src2, 'settings.json'), '{}');
-
-    // Overwrite _shared/settings.json with content first
-    writeFileSync(join(SHARED_DIR, 'settings.json'), '{"theme":"dark"}');
-
-    migrateDir(src2, TEST_PROFILE2, true);
-
-    // Should NOT have overwritten with empty '{}'
-    const content = readFileSync(join(SHARED_DIR, 'settings.json'), 'utf8');
-    assert.equal(content, '{"theme":"dark"}');
-
-    rmSync(src2, { recursive: true, force: true });
-  });
-
-  it('with shareSettings=false copies shared files directly to profile', () => {
-    const profileName = `zztest3${Date.now()}`;
-    const src3 = join(tmpdir(), `claude-migrate-test3-${Date.now()}`);
-    mkdirSync(src3, { recursive: true });
-    writeFileSync(join(src3, 'settings.json'), '{"direct":true}');
-
-    migrateDir(src3, profileName, false);
-    const dir = join(PROFILES_DIR, profileName);
-    assert.ok(existsSync(join(dir, 'settings.json')));
-    const content = readFileSync(join(dir, 'settings.json'), 'utf8');
-    assert.equal(content, '{"direct":true}');
-
-    // Cleanup
-    rmSync(dir, { recursive: true, force: true });
-    rmSync(src3, { recursive: true, force: true });
-  });
-
-  it('skips nonexistent source files gracefully', () => {
-    const emptySrc = join(tmpdir(), `claude-migrate-empty-${Date.now()}`);
-    mkdirSync(emptySrc, { recursive: true });
-    // No files inside — should not throw
-    const profileName = `zztest4${Date.now()}`;
-    assert.doesNotThrow(() => migrateDir(emptySrc, profileName, false));
-
-    // Cleanup
-    rmSync(join(PROFILES_DIR, profileName), { recursive: true, force: true });
-    rmSync(emptySrc, { recursive: true, force: true });
+  it('rejects nonexistent sources and files before writing profiles', () => {
+    assert.throws(() => migrateDir(join(HOME, 'missing'), 'work'), /not found/);
+    write(join(HOME, 'file'), '{}');
+    assert.throws(() => migrateDir(join(HOME, 'file'), 'work'), /must be a directory/);
+    assert.equal(existsSync(PROFILES_DIR), false);
   });
 });

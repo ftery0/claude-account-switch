@@ -1,59 +1,32 @@
 ---
 title: Installation — claude-account-switch
-description: How to install claude-account-switch. Use npx for zero-install or install globally with npm.
+description: Node.js, Claude Code and the local shell runtime.
 ---
 
 # Installation
 
-## Prerequisites
-
-- **Node.js 18+** — [Download](https://nodejs.org/)
-- **Claude Code** — `npm i -g @anthropic-ai/claude-code`
-
-## Recommended: Use with npx
-
-No installation needed — run directly:
+Node.js 18.19+ (18.x) or 20.10+ and npm are required. Keep your existing Claude Code installation. If Claude Code is missing, follow its [official installation guide](https://code.claude.com/docs/en/setup).
 
 ```bash
-npx claude-account-switch init
+npx claude-account-switch@latest init
 ```
 
-This downloads and runs the latest version automatically.
+First setup stores profiles and a local runtime in `~/.claude-profiles/`, then connects detected shells. The runtime survives npx cache removal.
 
-## Global Install
-
-If you prefer a permanent installation:
+## Repair or upgrade an existing setup
 
 ```bash
-npm i -g claude-account-switch
+npx claude-account-switch@latest install-shell
 ```
 
-Then run commands directly:
+Open a new terminal afterward. Repeating `init` preserves the current setup. `list`, `use` and help do not edit shell configuration either.
+
+A global CLI is optional: `npm install -g claude-account-switch@latest`. After upgrading it, run `claude-account-switch install-shell` to refresh the local runtime.
+
+## Verify
 
 ```bash
-claude-account-switch init
-claude-account-switch list
-claude-account-switch use work
+npx claude-account-switch@latest list
 ```
 
-## Verify Installation
-
-```bash
-# With npx
-npx claude-account-switch list
-
-# With global install
-claude-account-switch list
-```
-
-## Requirements
-
-| Requirement | Version |
-|-------------|---------|
-| Node.js | 18+ |
-| Claude Code | Latest |
-| Platform | macOS, Linux, Windows (native + WSL) |
-
-## Zero Dependencies
-
-`claude-account-switch` has no external dependencies — it uses only Node.js built-in modules for instant `npx` startup.
+Daily `claude`, `cpf` and `claude-pick` commands still require Node.js. See [platform setup](/guide/setup-macos).

@@ -1,244 +1,56 @@
 # claude-account-switch
 
 [![npm version](https://img.shields.io/npm/v/claude-account-switch)](https://www.npmjs.com/package/claude-account-switch)
-[![npm downloads](https://img.shields.io/npm/dm/claude-account-switch)](https://www.npmjs.com/package/claude-account-switch)
 [![license](https://img.shields.io/npm/l/claude-account-switch)](./LICENSE)
 
-[Claude Code](https://docs.anthropic.com/en/docs/claude-code)를 위한 멀티 계정 프로필 관리 도구.
+`CLAUDE_CONFIG_DIR`로 [Claude Code 계정](https://code.claude.com/docs/en/iam#log-in-with-multiple-accounts)을 전환합니다. 실행에 필요한 외부 패키지는 없습니다.
 
-[English](./README.md)
+[English](./README.md) · [전체 가이드](https://ftery0.github.io/claude-account-switch/ko/guide/)
 
-Claude Code는 공식적으로 멀티 계정을 지원하지 않습니다. `claude-account-switch`는 `CLAUDE_CONFIG_DIR` 환경변수를 활용해 프로필별로 독립된 OAuth 인증 정보를 관리합니다.
+## 시작
 
-## 빠른 시작
-
-```bash
-npx claude-account-switch init
-```
-
-인터랙티브 위자드가 프로필 생성, 기존 설정 마이그레이션, 감지된 모든 셸에 셸 통합 자동 설치를 안내합니다.
-
-```
-  ╭──────────────────────────────────────╮
-  │ Welcome to Claude Switch!            │
-  │ Multi-account manager for Claude Code│
-  ╰──────────────────────────────────────╯
-
-  How many profiles do you want to set up? 2
-
-  Profile 1 name: work
-  Profile 2 name: personal
-
-  Which profile should be active by default?
-  ❯ work
-    personal
-
-  Share settings across profiles? (recommended) Yes
-
-  Existing ~/.claude detected. Migrate to a profile?
-  ❯ Yes, migrate to "work"
-    Yes, migrate to "personal"
-    No, skip
-
-  ✓ Migrated ~/.claude → profile: work
-  ⚠ Original ~/.claude was NOT deleted.
-  ✓ Created profile: work
-  ✓ Created profile: personal
-  ✓ Shared settings linked
-  ✓ Shell integration installed (zsh, bash)
-  ✓ Active profile: work
-
-  Next steps:
-    1. Open a new terminal
-    2. Run claude to authenticate your "work" profile
-    3. Run cpf personal && claude to authenticate "personal"
-```
-
-**플랫폼별 가이드:** [macOS](docs/setup-macos.ko.md) · [Linux](docs/setup-linux.ko.md) · [Windows](docs/setup-windows.ko.md)
-
-## 설치
+Node.js 18.19+ (18계열) 또는 20.10+와 기존 Claude Code 설치를 사용합니다. Claude Code가 없다면 [공식 설치 가이드](https://code.claude.com/docs/en/setup)를 따릅니다.
 
 ```bash
-# npx로 바로 사용 (권장)
-npx claude-account-switch init
-
-# 또는 글로벌 설치
-npm i -g claude-account-switch
+npx claude-account-switch@latest init
 ```
+
+프로필 이름을 정하고 기존 설정 하나를 가져올지 선택한 뒤, 새 터미널을 엽니다.
+
+```bash
+claude
+cpf personal
+claude-pick
+```
+
+프로필이 여러 개이면 대화형 터미널에서 `claude` 실행 시 선택기가 나옵니다. 스크립트에서는 활성 프로필을 사용합니다. `--help`, `--version`을 포함한 Claude 인자는 그대로 전달됩니다.
+
+## 기존 사용자
+
+`init`을 다시 실행하면 현재 설정만 보여줍니다. 셸 통합을 복구하거나 새 버전으로 갱신하려면:
+
+```bash
+npx claude-account-switch@latest install-shell
+```
+
+셸은 `~/.claude-profiles/_runtime`의 로컬 실행 파일을 사용합니다. 일상적인 사용에는 글로벌 설치나 임시 npx 캐시가 필요하지 않습니다. Node.js와 Claude Code는 계속 설치되어 있어야 합니다.
 
 ## 명령어
 
-| 명령어 | 설명 |
-|--------|------|
-| `init` | 인터랙티브 설정 위자드 |
-| `add <name>` | 새 프로필 생성 |
-| `remove <name>` | 프로필 삭제 |
-| `list` | 프로필 목록 |
-| `use <name>` | 활성 프로필 전환 |
-| `migrate [name]` | 기존 `~/.claude` 데이터를 프로필로 마이그레이션 |
-| `install-shell` | 셸 통합 설치 |
-| `mcp [서브커맨드]` | MCP 서버 인터랙티브 관리 |
-| `update [옵션]` | Claude Code 업데이트 + 셸 통합 자동 갱신 |
+| 명령 | 용도 |
+| --- | --- |
+| `init` | 첫 설정 또는 기존 설정 요약 |
+| `add <name>` / `remove <name>` | 프로필 관리 |
+| `list` / `use <name>` | 프로필 조회·전환 |
+| `migrate <name> --from <path>` | 기존 설정을 안전하게 복사 |
+| `install-shell` | 셸 통합·로컬 실행 파일 설치·복구·갱신 |
+| `update --check` | 이 패키지의 배포 버전 확인 |
+| `mcp list` | 과거 MCP 이름과 전환 안내 조회 |
 
-## MCP 관리
+이관은 원본을 보존하며 데이터가 충돌하면 멈춥니다. 스킬·에이전트·규칙·훅·`CLAUDE.md`는 선택한 프로필에 보존됩니다. macOS Keychain 인증은 복사하지 않아 새 프로필에서 로그인할 수 있습니다. [이관·호환 안내](https://ftery0.github.io/claude-account-switch/ko/guide/commands)를 참고하세요.
 
-`claude-account-switch mcp` 명령으로 MCP 서버를 프로필별로 관리합니다.
+2 버전부터 별도 MCP 편집기와 Claude 설치 관리를 없앴습니다. 공식 `claude mcp`와 Claude의 [업데이트 방식](https://code.claude.com/docs/en/setup#update-manually)을 사용합니다. 과거 MCP 파일은 그대로 보존하며 업데이트 알림은 기본으로 꺼져 있습니다.
 
-### 인터랙티브 TUI
+플랫폼 가이드: [macOS](docs/setup-macos.ko.md) · [Linux](docs/setup-linux.ko.md) · [Windows](docs/setup-windows.ko.md)
 
-```bash
-claude-account-switch mcp
-```
-
-화살표 키로 이동, `Space`로 토글. 키: `a` 추가 · `d` 삭제 · `q` 종료. (TUI 메시지는 영어로 표시됩니다.)
-
-```
-  MCP Manager
-
-  ↑↓ move   Space toggle   a add   d delete   q quit
-
-  ── Shared (all profiles) ────────────────────────────────
-    ● context7     stdio   npx @upstash/context7-mcp@latest
-  ❯ ● figma        http    https://mcp.figma.com/mcp
-
-  ── work ────────────────────────────────────────────────
-    ● local-db     stdio   node ~/tools/db-mcp.mjs
-    ○ figma        (disabled for this profile)
-
-  ── personal ────────────────────────────────────────────
-    ○ context7     (disabled for this profile)
-```
-
-### MCP 저장 방식
-
-| 범위 | 파일 | 효과 |
-|------|------|------|
-| Shared (전체 프로필) | `_shared/settings.json` → `mcpServers{}` | 심링크로 모든 프로필에 자동 적용 |
-| 프로필 전용 | `<profile>/settings.local.json` → `mcpServers{}` | 해당 프로필에서만 로드 |
-| 공통 MCP 비활성화 | `<profile>/settings.local.json` → `disabledMcpServers[]` | 해당 프로필에서 공통 MCP 숨김 |
-
-```
-_shared/settings.json        ← mcpServers: { context7, figma }
-work/settings.local.json     ← mcpServers: { local-db }
-                                disabledMcpServers: ['figma']
-```
-
-### 서브커맨드
-
-| 명령어 | 설명 |
-|--------|------|
-| `mcp` | 인터랙티브 TUI 실행 |
-| `mcp add <name> --shared --type http --url <url>` | 공통 HTTP MCP 추가 |
-| `mcp add <name> --profile <p> --command <cmd>` | 프로필 전용 stdio MCP 추가 |
-| `mcp remove <name> --shared` | 공통 MCP 제거 |
-| `mcp remove <name> --profile <p>` | 프로필 전용 MCP 제거 |
-| `mcp disable <name> --profile <p>` | 특정 프로필에서 공통 MCP 비활성화 |
-| `mcp enable <name> --profile <p>` | 비활성화된 공통 MCP 재활성화 |
-
-### HTTP MCP 인증
-
-HTTP MCP 추가 후 해당 프로필로 claude를 실행한 뒤 `/mcp`에서 OAuth 인증이 필요합니다.
-
-## Claude Code 업데이트
-
-셸 통합을 깨뜨리지 않고 Claude Code를 안전하게 최신 버전으로 유지:
-
-```bash
-claude-account-switch update           # 두 패키지 체크 후 confirm 시 Claude Code 설치
-claude-account-switch update --check   # dry-run, 업데이트 있으면 exit 1 (CI 친화적)
-claude-account-switch update --self    # 자체 업데이트는 명령어 안내만 출력
-claude-account-switch update --claude-code --yes  # Claude Code 비대화형 업데이트
-```
-
-동작:
-
-- 설치 버전과 npm 레지스트리의 최신 버전 비교
-- 설치 경로로 패키지 매니저(npm / yarn / pnpm / bun) 자동 감지
-- `claude-account-switch`가 `npm link`로 설치된 경우 자체 업데이트 거부
-- 설치 후 셸 통합 자동 갱신 → 새 터미널에서 새 바이너리 사용
-- Windows에서 `claude.exe` 실행 중이면 파일 잠금 방지를 위해 설치 차단
-
-```
-  Package                          Installed   Latest    Action
-  ─────────────────────────────────────────────────────────────
-  claude-account-switch            1.2.2       1.2.2     up to date
-  @anthropic-ai/claude-code        2.1.139     2.1.195   update via npm
-
-  ? Update @anthropic-ai/claude-code now?   No / Yes
-```
-
-## 셸 통합
-
-`init` 실행 시 감지된 모든 셸에 자동 설치됩니다. 터미널에서 사용 가능:
-
-| 명령어 | 설명 |
-|--------|------|
-| `claude` | 활성 프로필로 Claude 실행 |
-| `cpf <name>` | 빠른 프로필 전환 |
-| `claude-pick` | 인터랙티브 프로필 선택기 |
-
-**지원 셸:**
-
-| 셸 | 플랫폼 | 설정 파일 |
-|----|--------|-----------|
-| zsh | macOS / Linux | `~/.zshrc` |
-| bash | macOS / Linux / Git Bash | `~/.bashrc` |
-| fish | macOS / Linux | `~/.config/fish/config.fish` |
-| PowerShell | Windows | `$PROFILE` |
-
-## 작동 방식
-
-```
-~/.claude-profiles/
-├── meta.json                  ← 프로필 메타 정보 + 활성 프로필
-├── .shell-integration.sh      ← bash/zsh 통합 스크립트
-├── .shell-integration.fish    ← fish 통합 스크립트
-├── .shell-integration.ps1     ← PowerShell 통합 스크립트
-├── .picker.mjs                ← 화살표 키 선택기 스크립트
-├── _shared/
-│   ├── settings.json          ← 공통 설정 (원본)
-│   └── commands/               ← 공통 커스텀 명령어
-├── work/
-│   ├── .claude.json           ← 회사 계정 OAuth
-│   ├── settings.local.json    ← 로컬 설정 (프로필별)
-│   ├── settings.json          → ../_shared/settings.json (심링크)
-│   ├── commands/              → ../_shared/commands/ (심링크)
-│   ├── plugins/               ← 설치된 플러그인
-│   ├── projects/              ← 프로젝트별 설정
-│   └── plans/                 ← 저장된 플랜
-└── personal/
-    ├── .claude.json           ← 개인 계정 OAuth
-    ├── settings.local.json
-    ├── settings.json          → ../_shared/settings.json
-    ├── commands/              → ../_shared/commands/
-    ├── plugins/
-    ├── projects/
-    └── plans/
-```
-
-- **공유 파일** (`settings.json`, `commands/`)은 `_shared/`에 원본 저장, 각 프로필에 링크
-  - macOS/Linux: 심볼릭 링크
-  - Windows: 먼저 심링크 생성을 시도하고, 실패 시(개발자 모드 미활성) 복사. 디렉토리는 항상 junction 사용.
-- **프로필별 파일** (`.claude.json`, `settings.local.json`, `plugins/`, `projects/`, `plans/`)은 독립 보관
-- **임시 파일** (`cache/`, `sessions/`, `history.jsonl` 등)은 Claude Code가 자동 생성, 관리하지 않음
-
-## 프로필 이름 규칙
-
-- 영문 소문자, 숫자, 하이픈만 허용
-- 문자 또는 숫자로 시작하고 끝나야 함
-- 최대 30자
-- 예약어 불가: `_shared`, `default`
-
-## 요구사항
-
-- Node.js 18+
-- Claude Code CLI 설치 필요
-- **지원 플랫폼:** macOS, Linux, Windows (네이티브 + WSL)
-
-## Zero Dependencies
-
-외부 의존성 없음 — Node.js 내장 모듈만 사용하여 `npx` 실행 시 즉시 시작됩니다.
-
-## 라이선스
-
-MIT
+[MIT](./LICENSE)

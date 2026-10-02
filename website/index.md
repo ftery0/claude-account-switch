@@ -15,7 +15,6 @@ jsonLd:
   description: "Multi-account profile manager for Claude Code. Switch between work and personal accounts instantly."
   url: "https://ftery0.github.io/claude-account-switch/"
   downloadUrl: "https://www.npmjs.com/package/claude-account-switch"
-  softwareVersion: "1.2.2"
   author:
     "@type": "Person"
     name: "haejun"
@@ -35,7 +34,7 @@ hero:
 
 features:
   - title: One-Command Setup
-    details: Run npx claude-account-switch init and the interactive wizard handles everything.
+    details: Create profiles, safely import existing configuration and install the local shell runtime.
   - title: Instant Profile Switching
     details: Use cpf <name> to switch profiles in milliseconds. No restart needed.
   - title: Zero Dependencies

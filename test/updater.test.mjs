@@ -1,304 +1,44 @@
-import { describe, it, before, after } from 'node:test';
+import './helpers/home.mjs';
+import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, lstatSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { parseSemver, compareSemver, fetchLatestVersion, computeUpdatePlan } from '../src/lib/updater.mjs';
 
-const mod = await import('../src/lib/updater.mjs');
-const {
-  parseSemver, compareSemver, buildInstallCommand, classifyPathToPm,
-  fetchLatestVersion, computeUpdatePlan, parseClaudeVersionOutput,
-  detectNativeClaudeInstall, buildNativeClaudeUpdateCommand,
-} = mod;
+const originalFetch = globalThis.fetch;
+afterEach(() => { globalThis.fetch = originalFetch; });
 
-// ── parseSemver / compareSemver ─────────────────────────────────────────────
-
-describe('parseSemver', () => {
-  it('parses 1.2.3', () => {
+describe('package versions', () => {
+  it('parses stable, prerelease, and build metadata', () => {
     assert.deepEqual(parseSemver('1.2.3'), { major: 1, minor: 2, patch: 3, pre: null });
+    assert.equal(parseSemver('1.2.3-rc.2+build.5').pre, 'rc.2');
+    for (const value of [null, '', 'invalid', '1.2']) assert.throws(() => parseSemver(value));
   });
-
-  it('parses pre-release', () => {
-    assert.deepEqual(parseSemver('1.0.0-rc.1'), { major: 1, minor: 0, patch: 0, pre: 'rc.1' });
+  it('compares release and numeric prerelease components correctly', () => {
+    for (const [a, b, expected] of [
+      ['1.0.0', '1.0.0', 0], ['1.0.0', '2.0.0', -1], ['2.0.0', '1.0.0', 1],
+      ['1.0.0', '1.1.0', -1], ['1.0.1', '1.0.0', 1], ['1.0.0-rc.1', '1.0.0', -1],
+      ['1.0.0-rc.9', '1.0.0-rc.10', -1], ['1.0.0-alpha', '1.0.0-beta', -1],
+      ['1.0.0-alpha', '1.0.0-alpha.1', -1], ['1.0.0-1', '1.0.0-alpha', -1],
+    ]) assert.equal(compareSemver(a, b), expected);
   });
-
-  it('ignores build metadata', () => {
-    assert.equal(parseSemver('2.0.0+build.5').patch, 0);
+  it('reads the registry version', async () => {
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ version: '99.0.0' }) });
+    assert.equal(await fetchLatestVersion(), '99.0.0');
   });
-
-  it('throws on invalid input', () => {
-    assert.throws(() => parseSemver('not-a-version'));
-    assert.throws(() => parseSemver(''));
-    assert.throws(() => parseSemver(null));
-  });
-});
-
-describe('compareSemver', () => {
-  it('returns 0 for equal', () => {
-    assert.equal(compareSemver('1.0.0', '1.0.0'), 0);
-  });
-
-  it('compares major.minor.patch', () => {
-    assert.equal(compareSemver('1.0.0', '2.0.0'), -1);
-    assert.equal(compareSemver('2.0.0', '1.0.0'), 1);
-    assert.equal(compareSemver('1.0.0', '1.1.0'), -1);
-    assert.equal(compareSemver('1.0.1', '1.0.0'), 1);
-  });
-
-  it('pre-release is less than release', () => {
-    assert.equal(compareSemver('1.0.0-rc.1', '1.0.0'), -1);
-    assert.equal(compareSemver('1.0.0', '1.0.0-rc.1'), 1);
-  });
-
-  it('compares pre-release tags lexically', () => {
-    assert.equal(compareSemver('1.0.0-alpha', '1.0.0-beta'), -1);
-  });
-});
-
-describe('parseClaudeVersionOutput', () => {
-  it('extracts Claude Code version output', () => {
-    assert.equal(parseClaudeVersionOutput('2.1.220 (Claude Code)'), '2.1.220');
-  });
-
-  it('returns null when no version is present', () => {
-    assert.equal(parseClaudeVersionOutput('Claude Code'), null);
-  });
-});
-
-// ── buildInstallCommand ─────────────────────────────────────────────────────
-
-describe('buildInstallCommand', () => {
-  it('builds npm command', () => {
-    const r = buildInstallCommand('npm', 'pkg-a');
-    assert.equal(r.cmd, 'npm');
-    assert.deepEqual(r.args, ['install', '-g', 'pkg-a@latest']);
-    assert.equal(r.displayCmd, 'npm install -g pkg-a@latest');
-  });
-
-  it('builds yarn command', () => {
-    const r = buildInstallCommand('yarn', 'pkg-a');
-    assert.deepEqual(r.args, ['global', 'add', 'pkg-a@latest']);
-  });
-
-  it('builds pnpm command', () => {
-    const r = buildInstallCommand('pnpm', 'pkg-a');
-    assert.deepEqual(r.args, ['add', '-g', 'pkg-a@latest']);
-  });
-
-  it('builds bun command', () => {
-    const r = buildInstallCommand('bun', 'pkg-a');
-    assert.deepEqual(r.args, ['add', '-g', 'pkg-a@latest']);
-  });
-
-  it('falls back to npm for unknown pm', () => {
-    const r = buildInstallCommand('unknown-pm', 'pkg-a');
-    assert.equal(r.cmd, 'npm');
-  });
-});
-
-describe('buildNativeClaudeUpdateCommand', () => {
-  it('runs the native claude binary with update', () => {
-    const r = buildNativeClaudeUpdateCommand('/tmp/claude');
-    assert.equal(r.cmd, '/tmp/claude');
-    assert.deepEqual(r.args, ['update']);
-    assert.equal(r.displayCmd, 'claude update');
-  });
-});
-
-// ── classifyPathToPm ────────────────────────────────────────────────────────
-
-describe('classifyPathToPm', () => {
-  it('returns null for empty path', () => {
-    assert.equal(classifyPathToPm(null), null);
-    assert.equal(classifyPathToPm(''), null);
-  });
-
-  it('detects yarn', () => {
-    assert.equal(classifyPathToPm('/Users/x/.yarn/global/node_modules/foo'), 'yarn');
-  });
-
-  it('detects pnpm', () => {
-    assert.equal(classifyPathToPm('/Users/x/.pnpm/foo'), 'pnpm');
-    assert.equal(classifyPathToPm('/Users/x/pnpm-global/5/node_modules/foo'), 'pnpm');
-  });
-
-  it('detects bun', () => {
-    assert.equal(classifyPathToPm('/Users/x/.bun/install/global/node_modules/foo'), 'bun');
-  });
-
-  it('defaults to npm', () => {
-    assert.equal(classifyPathToPm('/Users/x/.nvm/versions/node/v20/lib/node_modules/foo'), 'npm');
-    assert.equal(classifyPathToPm('/usr/local/lib/node_modules/foo'), 'npm');
-  });
-});
-
-describe('detectNativeClaudeInstall', () => {
-  it('returns null when no native binary exists', () => {
-    const r = detectNativeClaudeInstall({
-      home: '/tmp/missing',
-      exists: () => false,
-      execFile: () => '',
-    });
-    assert.equal(r, null);
-  });
-
-  it('detects native install version from claude --version', () => {
-    const seen = [];
-    const r = detectNativeClaudeInstall({
-      home: '/home/test',
-      exists: (path) => path.endsWith('/.local/bin/claude'),
-      execFile: (path, args) => {
-        seen.push([path, args]);
-        return '2.1.220 (Claude Code)';
-      },
-    });
-    assert.equal(r.version, '2.1.220');
-    assert.equal(r.installMethod, 'native');
-    assert.ok(r.path.endsWith('/.local/bin/claude'));
-    assert.deepEqual(seen[0][1], ['--version']);
-  });
-});
-
-// ── fetchLatestVersion (with stubbed fetch) ─────────────────────────────────
-
-describe('fetchLatestVersion', () => {
-  let originalFetch;
-  before(() => { originalFetch = globalThis.fetch; });
-  after(() => { globalThis.fetch = originalFetch; });
-
-  it('returns version from registry response', async () => {
-    globalThis.fetch = async () => ({
-      ok: true, status: 200,
-      json: async () => ({ version: '1.2.3' }),
-    });
-    const v = await fetchLatestVersion('@scope/pkg');
-    assert.equal(v, '1.2.3');
-  });
-
-  it('throws NOT_FOUND on 404', async () => {
+  it('rejects unavailable, malformed, and unreachable registry responses', async () => {
     globalThis.fetch = async () => ({ ok: false, status: 404 });
-    await assert.rejects(() => fetchLatestVersion('missing'), e => e.code === 'NOT_FOUND');
+    await assert.rejects(fetchLatestVersion(), /HTTP 404/);
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ version: 'invalid' }) });
+    await assert.rejects(fetchLatestVersion(), /Invalid version/);
+    globalThis.fetch = async () => { throw new Error('offline'); };
+    await assert.rejects(fetchLatestVersion(), /Could not reach/);
   });
-
-  it('throws HTTP on 5xx', async () => {
-    globalThis.fetch = async () => ({ ok: false, status: 500 });
-    await assert.rejects(() => fetchLatestVersion('x'), e => e.code === 'HTTP');
-  });
-
-  it('throws NETWORK on fetch rejection', async () => {
-    globalThis.fetch = async () => { throw new Error('ENOTFOUND'); };
-    await assert.rejects(() => fetchLatestVersion('x'), e => e.code === 'NETWORK');
-  });
-
-  it('throws HTTP when body has no version', async () => {
-    globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({}) });
-    await assert.rejects(() => fetchLatestVersion('x'), e => e.code === 'HTTP');
-  });
-});
-
-// ── computeUpdatePlan (DI scenarios) ────────────────────────────────────────
-
-describe('computeUpdatePlan', () => {
-  it('reports both packages up to date', async () => {
-    const plan = await computeUpdatePlan({
-      checkSelf: true,
-      checkClaude: true,
-      getInstalled: () => '1.0.0',
-      fetchLatest: async () => '1.0.0',
-    });
-    assert.equal(plan.self.hasUpdate, false);
-    assert.equal(plan.claude.hasUpdate, false);
-    assert.deepEqual(plan.errors, []);
-  });
-
-  it('flags hasUpdate when installed < latest', async () => {
-    const plan = await computeUpdatePlan({
-      checkSelf: false,
-      checkClaude: true,
-      getInstalled: () => '1.0.0',
-      fetchLatest: async () => '2.0.0',
-    });
-    assert.equal(plan.claude.hasUpdate, true);
-  });
-
-  it('collects registry errors without throwing', async () => {
-    const plan = await computeUpdatePlan({
-      checkSelf: false,
-      checkClaude: true,
-      getInstalled: () => '1.0.0',
-      fetchLatest: async () => { const e = new Error('Network down'); e.code = 'NETWORK'; throw e; },
-    });
-    assert.equal(plan.claude.hasUpdate, false);
-    assert.ok(plan.errors.length > 0);
-  });
-
-  it('null installed + valid latest is not flagged as hasUpdate', async () => {
-    const plan = await computeUpdatePlan({
-      checkSelf: false,
-      checkClaude: true,
-      getInstalled: () => null,
-      fetchLatest: async () => '1.0.0',
-      getNativeClaude: () => null,
-    });
-    assert.equal(plan.claude.hasUpdate, false);
-    assert.equal(plan.claude.installed, null);
-    assert.equal(plan.claude.latest, '1.0.0');
-  });
-
-  it('uses native Claude Code version when npm package is not installed', async () => {
-    const plan = await computeUpdatePlan({
-      checkSelf: false,
-      checkClaude: true,
-      getInstalled: () => null,
-      fetchLatest: async () => '2.1.220',
-      getNativeClaude: () => ({ installMethod: 'native', path: '/home/test/.local/bin/claude', version: '2.1.220' }),
-    });
-    assert.equal(plan.claude.installed, '2.1.220');
-    assert.equal(plan.claude.installMethod, 'native');
-    assert.equal(plan.claude.hasUpdate, false);
-  });
-
-  it('flags native Claude Code update when native version is behind latest', async () => {
-    const plan = await computeUpdatePlan({
-      checkSelf: false,
-      checkClaude: true,
-      getInstalled: () => null,
-      fetchLatest: async () => '2.1.220',
-      getNativeClaude: () => ({ installMethod: 'native', path: '/home/test/.local/bin/claude', version: '2.1.100' }),
-    });
-    assert.equal(plan.claude.installed, '2.1.100');
-    assert.equal(plan.claude.installMethod, 'native');
-    assert.equal(plan.claude.hasUpdate, true);
-  });
-
-  it('omits sections when check flags are false', async () => {
-    const plan = await computeUpdatePlan({
-      checkSelf: true,
-      checkClaude: false,
-      getInstalled: () => '1.0.0',
-      fetchLatest: async () => '1.0.0',
-    });
-    assert.equal(plan.claude, null);
-    assert.ok(plan.self);
-  });
-});
-
-// ── isDevSymlink via tmpdir (no monkey-patching the npm root call) ──────────
-// This is intentionally light — full integration is covered by manual smoke.
-
-describe('isDevSymlink (tmpdir sanity)', () => {
-  let tmp;
-  before(() => { tmp = mkdtempSync(join(tmpdir(), 'cas-updater-')); });
-  after(() => { rmSync(tmp, { recursive: true, force: true }); });
-
-  it('lstatSync correctly distinguishes symlink vs directory', () => {
-    const real = join(tmp, 'real');
-    const link = join(tmp, 'link');
-    mkdirSync(real);
-    symlinkSync(real, link);
-    writeFileSync(join(real, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.0' }));
-
-    assert.equal(lstatSync(real).isSymbolicLink(), false);
-    assert.equal(lstatSync(link).isSymbolicLink(), true);
+  it('only checks this package and detects newer or older registry versions', async () => {
+    const seen = [];
+    const updated = await computeUpdatePlan({ fetchVersion: async pkg => { seen.push(pkg); return '99.0.0'; } });
+    assert.equal(updated.self.hasUpdate, true);
+    assert.deepEqual(seen, ['claude-account-switch']);
+    assert.equal(updated.claude, undefined);
+    const current = await computeUpdatePlan({ fetchVersion: async () => '0.0.1' });
+    assert.equal(current.self.hasUpdate, false);
   });
 });
