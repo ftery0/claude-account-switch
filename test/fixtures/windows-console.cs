@@ -76,6 +76,8 @@ public static class ConsoleSmoke
             var startup = new StartupInfoEx();
             startup.Startup.Size = Marshal.SizeOf(typeof(StartupInfoEx));
             startup.Attributes = attributes;
+            // Null standard handles prevent inheriting the CI host pipes instead of the console.
+            startup.Startup.Flags = 0x100;
             var command = new StringBuilder(Environment.GetEnvironmentVariable("CAS_CONSOLE_COMMAND"));
             Check(CreateProcess(null, command, IntPtr.Zero, IntPtr.Zero, false, 0x80000, IntPtr.Zero, null, ref startup, out process), "console process");
             CloseHandle(inputRead); inputRead = IntPtr.Zero;
