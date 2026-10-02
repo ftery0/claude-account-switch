@@ -149,16 +149,6 @@ export function runCrossShellSmoke({ repo = repository, shell, psMode = 'Default
   try {
     fixture = createShellFixture(['work', 'personal'], shell);
     installFixture(fixture, resolve(repo), kind);
-    if (kind === 'powershell') {
-      const template = join(fixture.profilesDir, '.shell-integration.ps1');
-      const trace = readFileSync(template, 'utf8')
-        .replace('function __claude_switch_cli {', "function __claude_switch_cli {\n  [Console]::Error.WriteLine('CAS_PS5_CLI')")
-        .replace("$hadTransport = Test-Path Env:CLAUDE_SWITCH_ARGV", "[Console]::Error.WriteLine('CAS_PS5_COMMAND_READY')\n  $hadTransport = Test-Path Env:CLAUDE_SWITCH_ARGV")
-        .replace("$env:CLAUDE_SWITCH_ARGV = [Convert]::ToBase64String", "[Console]::Error.WriteLine('CAS_PS5_PAYLOAD_READY')\n    $env:CLAUDE_SWITCH_ARGV = [Convert]::ToBase64String")
-        .replace('& $node.Source --input-type=module', "[Console]::Error.WriteLine('CAS_PS5_NODE_START')\n    & $node.Source --input-type=module")
-        .replace('$exitCode = $LASTEXITCODE', "[Console]::Error.WriteLine('CAS_PS5_NODE_END')\n    $exitCode = $LASTEXITCODE");
-      writeFileSync(template, trace);
-    }
     const nativeMode = powerShell && psMode !== 'Default' ? `$PSNativeCommandArgumentPassing=${psQuote(psMode)}; ` : '';
     const source = cmd ? '' : nativeMode + sourceIntegration(fixture, shell);
     const quote = value => quoteArgument(value, kind);
@@ -195,9 +185,7 @@ export function runCrossShellSmoke({ repo = repository, shell, psMode = 'Default
     } else {
       const forwarded = ['--help', '--version', 'a b', '', '$literal', 'quote"value', '한글', 'slash\\"quote', 'trailing\\', "single'quote"];
       if (!cmd) forwarded.push('line\nbreak');
-      const traceStart = kind === 'powershell' ? "[Console]::Error.WriteLine('CAS_PS5_START'); " : '';
-      const traceLoaded = kind === 'powershell' ? "[Console]::Error.WriteLine('CAS_PS5_LOADED'); " : '';
-      const output = fakeOutput(run(traceStart + source + traceLoaded + launch(forwarded) + ending));
+      const output = fakeOutput(run(source + launch(forwarded) + ending));
       assert.deepEqual(output.args, forwarded);
       assert.equal(output.config, join(fixture.profilesDir, 'work'));
       checks.push('argument-preservation/config-dir');
