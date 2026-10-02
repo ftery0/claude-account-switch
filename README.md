@@ -37,7 +37,7 @@ The shell uses a local runtime in `~/.claude-profiles/_runtime`, so global insta
 
 Interactive Claude launches check for this tool's updates once daily in the background. A verified compatible package becomes active on the next launch. Active sessions keep their existing files; account data, harness hooks and shell profiles are not rewritten. Offline or failed downloads keep the installed version. Noninteractive launches do not update.
 
-Set `CLAUDE_SWITCH_DISABLE_AUTO_UPDATE=1` to disable automatic updates. For an immediate update, run `node ~/.claude-profiles/_runtime/bin/cli.mjs update`; add `--check` to check without installing. Global npm installations are independent; the shell runtime updates itself. Previous runtime versions are retained to protect active sessions.
+Set `CLAUDE_SWITCH_DISABLE_AUTO_UPDATE=1` to disable automatic updates. For an immediate update, run `npx claude-account-switch@latest update`; add `--check` to check without installing. Global npm installations are independent; the shell runtime updates itself. Previous runtime versions are retained to protect active sessions.
 
 ## Commands
 

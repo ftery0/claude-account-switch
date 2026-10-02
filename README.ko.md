@@ -37,7 +37,7 @@ npx claude-account-switch@latest install-shell
 
 대화형 Claude 실행 시 하루 한 번 백그라운드에서 이 도구의 새 버전을 확인합니다. 검증된 호환 버전은 다음 실행부터 사용하며, 실행 중인 세션의 파일·계정 데이터·하네스 훅·셸 설정 파일을 덮어쓰지 않습니다. 오프라인이나 다운로드 실패 시 기존 버전으로 계속 실행합니다. 비대화형 실행에서는 자동 업데이트하지 않습니다.
 
-`CLAUDE_SWITCH_DISABLE_AUTO_UPDATE=1`로 자동 업데이트를 끌 수 있습니다. 즉시 갱신하려면 `node ~/.claude-profiles/_runtime/bin/cli.mjs update`를 실행하고, 설치 없이 확인하려면 `--check`를 붙입니다. 글로벌 npm 설치본과 셸 실행 파일은 별개이며, 자동 업데이트는 셸 실행 파일만 갱신합니다. 실행 중인 세션 보호를 위해 이전 실행 파일은 보존합니다.
+`CLAUDE_SWITCH_DISABLE_AUTO_UPDATE=1`로 자동 업데이트를 끌 수 있습니다. 즉시 갱신하려면 `npx claude-account-switch@latest update`를 실행하고, 설치 없이 확인하려면 `--check`를 붙입니다. 글로벌 npm 설치본과 셸 실행 파일은 별개이며, 자동 업데이트는 셸 실행 파일만 갱신합니다. 실행 중인 세션 보호를 위해 이전 실행 파일은 보존합니다.
 
 ## 명령어
 

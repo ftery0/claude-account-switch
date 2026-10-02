@@ -4,12 +4,13 @@ import { delimiter, join } from 'node:path';
 import { after } from 'node:test';
 
 const testRoot = mkdtempSync(join(tmpdir(), 'claude-switch-test-'));
+const inheritedPath = process.env.PATH;
 const retained = new Set([
   'PATH', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'ComSpec', 'COMSPEC', 'PATHEXT',
   'LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH', 'NODE_TEST_CONTEXT',
 ]);
 for (const key of Object.keys(process.env)) {
-  if (!retained.has(key)) delete process.env[key];
+  if (!retained.has(key) || key.toUpperCase() === 'PATH') delete process.env[key];
 }
 const home = join(testRoot, 'home');
 const temp = join(testRoot, 'tmp');
@@ -32,6 +33,6 @@ if (process.platform === 'win32') {
 } else {
   writeFileSync(join(guard, 'claude'), '#!/bin/sh\necho "Unexpected Claude invocation outside a fixture" >&2\nexit 97\n', { mode: 0o755 });
 }
-process.env.PATH = [guard, process.env.PATH].filter(Boolean).join(delimiter);
+process.env.PATH = [guard, inheritedPath].filter(Boolean).join(delimiter);
 
 after(() => rmSync(testRoot, { recursive: true, force: true }));
