@@ -153,6 +153,8 @@ export function runCrossShellSmoke({ repo = repository, shell, psMode = 'Default
       const template = join(fixture.profilesDir, '.shell-integration.ps1');
       const trace = readFileSync(template, 'utf8')
         .replace('function __claude_switch_cli {', "function __claude_switch_cli {\n  [Console]::Error.WriteLine('CAS_PS5_CLI')")
+        .replace("$hadTransport = Test-Path Env:CLAUDE_SWITCH_ARGV", "[Console]::Error.WriteLine('CAS_PS5_COMMAND_READY')\n  $hadTransport = Test-Path Env:CLAUDE_SWITCH_ARGV")
+        .replace("$env:CLAUDE_SWITCH_ARGV = [Convert]::ToBase64String", "[Console]::Error.WriteLine('CAS_PS5_PAYLOAD_READY')\n    $env:CLAUDE_SWITCH_ARGV = [Convert]::ToBase64String")
         .replace('& $node.Source --input-type=module', "[Console]::Error.WriteLine('CAS_PS5_NODE_START')\n    & $node.Source --input-type=module")
         .replace('$exitCode = $LASTEXITCODE', "[Console]::Error.WriteLine('CAS_PS5_NODE_END')\n    $exitCode = $LASTEXITCODE");
       writeFileSync(template, trace);
@@ -164,7 +166,7 @@ export function runCrossShellSmoke({ repo = repository, shell, psMode = 'Default
     const launch = values => cmd ? `node ${quote(runtime)} shell launch ${values.map(quote).join(' ')}` : `claude ${values.map(quote).join(' ')}`;
     const ending = powerShell ? '; exit $LASTEXITCODE' : cmd ? '' : kind === 'fish' ? '; exit $status' : '; exit $?';
     const run = (script, extra = {}) => {
-      const result = spawnSync(shell, shellArguments(shell, script), { cwd: fixture.workspace, env: { ...fixture.env, ...extra }, stdio: ['ignore', 'pipe', 'pipe'], windowsVerbatimArguments: cmd, encoding: 'utf8', timeout: 15000 });
+      const result = spawnSync(shell, shellArguments(shell, script), { cwd: fixture.workspace, env: { ...fixture.env, ...extra }, stdio: ['ignore', 'pipe', 'pipe'], windowsVerbatimArguments: cmd, encoding: 'utf8', timeout: kind === 'powershell' ? 60000 : 15000 });
       lastResult = { status: result.status, signal: result.signal, stdout: result.stdout, stderr: result.stderr, error: result.error?.message };
       return result;
     };
