@@ -1,203 +1,32 @@
 # Claude Switch fish integration
-# Auto-generated — do not edit manually
 
-set -g __CLAUDE_PROFILES_DIR "$HOME/.claude-profiles"
-set -g __CLAUDE_META_FILE "$__CLAUDE_PROFILES_DIR/meta.json"
-
-# Resolve real claude binary path BEFORE our function shadows the name.
-set -g __CLAUDE_SWITCH_REAL_BIN (command -v claude 2>/dev/null)
-
-# Globals above can be missing in shells that inherit only functions
-# (IDE terminals, snapshots) — every entry point re-derives them.
-function __claude_switch_defaults
-  if test -z "$__CLAUDE_PROFILES_DIR"
-    set -g __CLAUDE_PROFILES_DIR "$HOME/.claude-profiles"
+function __claude_switch_cli
+  set -l runtime "$HOME/.claude-profiles/_runtime/bin/cli.mjs"
+  if not test -f "$runtime"; or not command -q node
+    echo 'Shell runtime unavailable. Run: npx claude-account-switch@latest install-shell' >&2
+    return 127
   end
-  if test -z "$__CLAUDE_META_FILE"
-    set -g __CLAUDE_META_FILE "$__CLAUDE_PROFILES_DIR/meta.json"
-  end
-end
-
-function __claude_switch_active
-  __claude_switch_defaults
-  if test -f $__CLAUDE_META_FILE
-    node -e 'try{process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).activeProfile||"")}catch(e){}' "$__CLAUDE_META_FILE" 2>/dev/null
-  end
-end
-
-function __claude_switch_profiles
-  __claude_switch_defaults
-  for d in $__CLAUDE_PROFILES_DIR/*/
-    if test -d $d
-      set name (basename $d)
-      if not string match -q '_*' $name
-        echo $name
-      end
-    end
-  end
+  command node "$runtime" $argv
 end
 
 function __claude_switch_launch
   set -l profile $argv[1]
   set -e argv[1]
-  __claude_switch_defaults
-  if test -f "$__CLAUDE_PROFILES_DIR/$profile/.claude.json"
-    echo (set_color cyan)"[claude-account-switch]"(set_color normal)" Profile: "(set_color --bold)$profile(set_color normal)
-  else
-    echo (set_color cyan)"[claude-account-switch]"(set_color normal)" Profile: "(set_color --bold)$profile(set_color normal)" "(set_color yellow)"(not logged in — login will start)"(set_color normal)
-  end
-  # Resolve at launch time: cached path → known install locations
-  # (native installer first) → npm global (legacy). The cached var can be
-  # empty in function-only shells or stale after an update.
-  set -l _bin $__CLAUDE_SWITCH_REAL_BIN
-  if test -z "$_bin" -o ! -x "$_bin"
-    set _bin ""
-    for _c in \
-      "$HOME/.local/bin/claude" \
-      "$HOME/.claude/local/claude" \
-      /opt/homebrew/bin/claude \
-      /usr/local/bin/claude
-      if test -x "$_c"
-        set _bin $_c
-        break
-      end
-    end
-  end
-  if test -z "$_bin"
-    set -l _npm_root (npm root -g 2>/dev/null)
-    if test -n "$_npm_root"
-      for _c in \
-        "$_npm_root/@anthropic-ai/claude-code/bin/claude.exe" \
-        "$_npm_root/@anthropic-ai/claude-code/bin/claude" \
-        "$_npm_root/@anthropic-ai/claude-code/cli.js"
-        if test -x "$_c" -o -f "$_c"
-          set _bin $_c
-          break
-        end
-      end
-    end
-  end
-  if test -z "$_bin"
-    echo (set_color red)"[claude-account-switch]"(set_color normal)" Error: claude binary not found." >&2
-    echo "  Reinstall (native): curl -fsSL https://claude.ai/install.sh | bash" >&2
-    return 127
-  end
-  set -x CLAUDE_CONFIG_DIR "$__CLAUDE_PROFILES_DIR/$profile"
-  if string match -q "*.js" -- $_bin
-    node "$_bin" $argv
-  else
-    "$_bin" $argv
-  end
-  set -e CLAUDE_CONFIG_DIR
+  set -l hook "$HOME/.claude-profiles/$profile/pre-launch.fish"
+  command fish -c 'set -l hook $argv[1]; set -e argv[1]; if test -f "$hook"; source "$hook"; or exit $status; end; exec $argv' "$hook" node "$HOME/.claude-profiles/_runtime/bin/cli.mjs" shell launch --profile "$profile" -- $argv
 end
 
 function claude
-  __claude_switch_defaults
-  set -l profiles (__claude_switch_profiles)
-  set -l count (count $profiles)
-
-  if test $count -eq 0
-    echo "No claude-account-switch profiles found. Run: npx claude-account-switch init" >&2
-    return 1
-  end
-
-  if test $count -eq 1
-    __claude_switch_launch $profiles[1] $argv
-    return
-  end
-
-  set -l current (__claude_switch_active)
-  set -l selected ""
-
-  if test -f "$__CLAUDE_PROFILES_DIR/.picker.mjs"; and command -v node >/dev/null 2>&1
-    set selected (node "$__CLAUDE_PROFILES_DIR/.picker.mjs" </dev/tty)
-    if test -z "$selected"
-      return 1
-    end
-  else
-    echo ""
-    echo (set_color cyan)"[claude-account-switch]"(set_color normal)" Select a profile:"
-    echo ""
-    for i in (seq 1 $count)
-      set -l p $profiles[$i]
-      set -l marker " "
-      set -l login_status ""
-      if test "$p" = "$current"
-        set marker (set_color green)">"(set_color normal)
-      end
-      if not test -f "$__CLAUDE_PROFILES_DIR/$p/.claude.json"
-        set login_status " "(set_color yellow)"(not logged in)"(set_color normal)
-      end
-      echo "  $marker $i) $p$login_status"
-    end
-    echo ""
-    read -P "  Enter number (default: $current): " choice
-    if test -z "$choice"
-      set selected $current
-    else if string match -qr '^[0-9]+$' "$choice"
-      and test $choice -ge 1
-      and test $choice -le $count
-      set selected $profiles[$choice]
-    end
-    if test -z "$selected"
-      echo "Invalid selection" >&2
-      return 1
-    end
-  end
-
-  if test "$selected" != "$current"
-    cpf $selected >/dev/null
-  end
-
-  echo ""
-  __claude_switch_launch $selected $argv
+  set -l selected (__claude_switch_cli shell pick --print)
+  or return $status
+  test -n "$selected"; or return 1
+  __claude_switch_launch "$selected" $argv
 end
 
 function cpf
-  __claude_switch_defaults
-  if test -z "$argv[1]"
-    echo "Usage: cpf <profile-name>" >&2
-    return 1
-  end
-  if not test -d "$__CLAUDE_PROFILES_DIR/$argv[1]"
-    echo "Profile \"$argv[1]\" not found" >&2
-    return 1
-  end
-  node -e 'var fs=require("fs"),f=process.argv[1],m=JSON.parse(fs.readFileSync(f,"utf8"));m.activeProfile=process.argv[2];fs.writeFileSync(f,JSON.stringify(m,null,2))' "$__CLAUDE_META_FILE" "$argv[1]" 2>/dev/null
-  echo "Switched to profile: $argv[1]"
+  __claude_switch_cli shell use $argv
 end
 
 function claude-pick
-  __claude_switch_defaults
-  if test -f "$__CLAUDE_PROFILES_DIR/.picker.mjs"; and command -v node >/dev/null 2>&1
-    set -l selected (node "$__CLAUDE_PROFILES_DIR/.picker.mjs" </dev/tty)
-    if test -z "$selected"
-      return 1
-    end
-    cpf $selected
-  else
-    set -l profiles (__claude_switch_profiles)
-    if test -z "$profiles"
-      echo "No profiles found. Run: npx claude-account-switch init" >&2
-      return 1
-    end
-    set -l current (__claude_switch_active)
-    echo "Select a profile:"
-    for i in (seq 1 (count $profiles))
-      set -l p $profiles[$i]
-      set -l marker ""
-      if test "$p" = "$current"
-        set marker " *"
-      end
-      echo "  $i) $p$marker"
-    end
-    read -P "Enter number: " choice
-    if string match -qr '^[0-9]+$' "$choice"
-      and test $choice -ge 1
-      and test $choice -le (count $profiles)
-      cpf $profiles[$choice]
-    else
-      echo "Invalid selection" >&2
-    end
-  end
+  __claude_switch_cli shell pick
 end

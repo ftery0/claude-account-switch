@@ -1,103 +1,54 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { color, success, warn, error } from '../lib/ui.mjs';
+import { parseArgs } from 'node:util';
+import { resolve } from 'node:path';
+import { color, success, warn } from '../lib/ui.mjs';
 import * as prompt from '../lib/prompt.mjs';
 import { readMeta } from '../lib/config.mjs';
-import { migrateDir, profileExists, profileDir, validateProfileName } from '../lib/profile.mjs';
-import { HOME, DEFAULT_CLAUDE_DIR, IS_WINDOWS } from '../lib/constants.mjs';
+import { migrateDir, profileExists, validateProfileName } from '../lib/profile.mjs';
+import { existingClaudeSources } from './init.mjs';
 
-export async function migrate(profileName) {
+export async function migrate(profileName, argv = []) {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    options: { from: { type: 'string' } },
+    allowPositionals: true,
+  });
   const meta = readMeta();
-
   if (meta.profiles.length === 0) {
-    error('No profiles found. Run claude-account-switch init first.');
-    process.exit(1);
+    throw new Error('No profiles found. Run claude-account-switch init first.');
+  }
+  if (positionals.length > 1) throw new Error('Usage: claude-account-switch migrate [profile] --from <path>');
+  let target = positionals[0] || (profileName && !profileName.startsWith('-') ? profileName : undefined);
+  if (!target) target = await prompt.select('Copy into which profile?', meta.profiles);
+  if (!target) return;
+  const error = validateProfileName(target);
+  if (error) throw new Error(error);
+  if (!profileExists(target) || !meta.profiles.includes(target)) {
+    throw new Error(`Profile "${target}" does not exist.`);
   }
 
-  // Pick source directory
-  const h = IS_WINDOWS ? '%USERPROFILE%' : '~';
-  const commonSources = [
-    { label: `${h}/.claude  (default Claude Code directory)`, value: DEFAULT_CLAUDE_DIR },
-    { label: `${h}/.claude-work`, value: join(HOME, '.claude-work') },
-    { label: `${h}/.claude-personal`, value: join(HOME, '.claude-personal') },
-    { label: 'Enter a custom path', value: '__custom__' },
-  ].filter(s => s.value === '__custom__' || existsSync(s.value));
-
-  if (commonSources.length === 1) {
-    // Only custom option left — no known dirs found
-    error(`No existing Claude directories found (checked ${h}/.claude, ${h}/.claude-work, ${h}/.claude-personal).`);
-    console.log(`  Specify a path manually with: ${color.cyan('claude-account-switch migrate <profile> --from <path>')}`);
-    process.exit(1);
+  let source = values.from;
+  if (source !== undefined && !source.trim()) throw new Error('Source path cannot be empty.');
+  if (!source) {
+    const choices = existingClaudeSources().map(path => ({ label: path, value: path }));
+    choices.push({ label: 'Enter a custom path', value: '__custom__' });
+    source = await prompt.select('Which configuration do you want to copy?', choices);
+    if (!source) return;
+    if (source === '__custom__') source = await prompt.text('Enter the full path to the directory:', '');
+    if (!source.trim()) throw new Error('Source path cannot be empty.');
   }
-
+  source = resolve(source);
   console.log();
-  const sourceChoice = await prompt.select('Which directory do you want to migrate from?', commonSources);
-
-  let sourceDir = sourceChoice;
-  if (sourceChoice === '__custom__') {
-    sourceDir = await prompt.text('Enter the full path to the directory:', '');
-    if (!sourceDir) {
-      error('Path cannot be empty.');
-      process.exit(1);
-    }
-  }
-
-  if (!existsSync(sourceDir)) {
-    error(`Directory not found: ${sourceDir}`);
-    process.exit(1);
-  }
-
-  // Pick target profile
-  let targetProfile = profileName;
-  if (!targetProfile) {
-    console.log();
-    targetProfile = await prompt.select(
-      'Migrate into which profile?',
-      meta.profiles,
-    );
-  } else {
-    const validationError = validateProfileName(targetProfile);
-    if (validationError) {
-      error(validationError);
-      process.exit(1);
-    }
-    if (!profileExists(targetProfile)) {
-      error(`Profile "${targetProfile}" does not exist.`);
-      process.exit(1);
-    }
-  }
-
-  console.log();
-  console.log(`  Source : ${color.cyan(sourceDir)}`);
-  console.log(`  Profile: ${color.cyan(targetProfile)}`);
-  console.log();
-
-  // Warn if target profile already has auth data — migration would overwrite it
-  const targetAuthFile = join(profileDir(targetProfile), '.claude.json');
-  if (existsSync(targetAuthFile)) {
-    warn(`Profile "${targetProfile}" already has credentials (.claude.json).`);
-    warn('Migrating will overwrite existing profile data.');
-  }
-
-  const confirmed = await prompt.confirm(
-    `This will copy data from ${sourceDir} into the "${targetProfile}" profile. Continue?`,
-    true,
-  );
+  console.log(`  Source : ${color.cyan(source)}`);
+  console.log(`  Profile: ${color.cyan(target)}`);
+  console.log('  Existing conflicting data will stop migration. The source will be preserved.');
+  const confirmed = await prompt.confirm(`Copy configuration into "${target}"?`, true);
   if (!confirmed) {
     console.log('  Cancelled.');
     return;
   }
-
-  console.log();
-  migrateDir(sourceDir, targetProfile, meta.shareSettings);
-  success(`Migrated ${sourceDir} → profile: ${targetProfile}`);
-  warn(`Original ${sourceDir} was NOT deleted. Once you verify everything works, you can remove it manually.`);
-  console.log();
-  console.log(`  ${color.bold('What was migrated:')}`);
-  console.log(`    • .claude.json, settings.local.json  (auth & local settings)`);
-  console.log(`    • plugins/, projects/, plans/         (profile data)`);
-  if (meta.shareSettings) {
-    console.log(`    • settings.json, commands/            (copied to _shared, symlinked)`);
-  }
+  migrateDir(source, target, meta.shareSettings !== false);
+  success(`Copied ${source} → profile: ${target}`);
+  warn('Original configuration was preserved. macOS Keychain credentials are not copied.');
+  console.log('  Claude will check authentication when you launch this profile.');
   console.log();
 }

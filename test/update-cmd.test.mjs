@@ -1,106 +1,89 @@
+import './helpers/home.mjs';
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const CLI = join(__dirname, '..', 'bin', 'cli.mjs');
+const CLI = fileURLToPath(new URL('../bin/cli.mjs', import.meta.url));
+const fakeBin = join(homedir(), '.local', 'bin', process.platform === 'win32' ? 'claude.exe' : 'claude');
+let server;
+let registry;
+let latest = '99.0.0';
+let statusCode = 200;
+let requests = [];
 
-function installFakeNativeClaude(version = '1.0.0') {
-  const bin = join(homedir(), '.local', 'bin', 'claude');
-  mkdirSync(dirname(bin), { recursive: true });
-  writeFileSync(bin, `#!/bin/sh\necho "${version} (Claude Code)"\n`);
-  chmodSync(bin, 0o755);
-  return bin;
-}
-
-// In-process mock registry: returns hardcoded latest versions
-function startMockRegistry({ self, claude }) {
-  return new Promise((resolve) => {
-    const server = createServer((req, res) => {
-      res.setHeader('content-type', 'application/json');
-      if (req.url.endsWith('/claude-account-switch/latest')) {
-        res.end(JSON.stringify({ version: self }));
-      } else if (req.url.includes('claude-code') && req.url.endsWith('/latest')) {
-        res.end(JSON.stringify({ version: claude }));
-      } else {
-        res.statusCode = 404;
-        res.end('{}');
-      }
-    });
-    server.listen(0, '127.0.0.1', () => {
-      const { port } = server.address();
-      resolve({ server, url: `http://127.0.0.1:${port}` });
-    });
+before(async () => {
+  mkdirSync(join(homedir(), '.local', 'bin'), { recursive: true });
+  writeFileSync(fakeBin, 'preserve this executable');
+  server = createServer((req, res) => {
+    requests.push(req.url);
+    res.statusCode = statusCode;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ version: latest }));
   });
-}
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  registry = `http://127.0.0.1:${server.address().port}`;
+});
+after(() => server?.close());
 
-function runCli(args, env = {}) {
-  return new Promise((resolve) => {
+function runCli(args) {
+  return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [CLI, ...args], {
-      env: { ...process.env, ...env },
-      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, CAS_TEST_REGISTRY_URL: registry }, stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', d => (stdout += d));
-    child.stderr.on('data', d => (stderr += d));
-    child.on('close', code => resolve({ code, stdout, stderr }));
+    child.stdout.on('data', data => { stdout += data; });
+    child.stderr.on('data', data => { stderr += data; });
+    child.once('error', reject);
+    child.once('close', code => resolve({ code, stdout, stderr }));
   });
 }
 
-describe('update --check (with mock registry)', () => {
-  let server;
-  let url;
-
-  before(async () => {
-    // Returns a very high version so it always reports "update available"
-    installFakeNativeClaude('1.0.0');
-    ({ server, url } = await startMockRegistry({ self: '99.0.0', claude: '99.0.0' }));
+describe('explicit package updates', () => {
+  it('exits 1 for a newer package without installing or changing shells', async () => {
+    const result = await runCli(['update', '--check']);
+    assert.equal(result.code, 1, result.stderr);
+    assert.match(result.stdout, /99\.0\.0/);
+    assert.equal(readFileSync(fakeBin, 'utf8'), 'preserve this executable');
+    assert.equal(existsSync(join(homedir(), '.claude-profiles')), false);
+    assert.deepEqual(requests, ['/claude-account-switch/latest']);
   });
-
-  after(() => { server.close(); });
-
-  it('renders a table and exits 1 when updates are available', async () => {
-    const { code, stdout } = await runCli(['update', '--check'], { CAS_TEST_REGISTRY_URL: url });
-    assert.equal(code, 1, `expected exit 1 (updates available), got ${code}`);
-    assert.match(stdout, /Package/);
-    assert.match(stdout, /Latest/);
-    assert.match(stdout, /99\.0\.0/);
+  it('preserves --self and never queries Claude versions', async () => {
+    requests = [];
+    const result = await runCli(['update', '--self', '--yes']);
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /no installation was run/);
+    assert.deepEqual(requests, ['/claude-account-switch/latest']);
+    assert.equal(readFileSync(fakeBin, 'utf8'), 'preserve this executable');
   });
-
-  it('filters to self with --self', async () => {
-    const { stdout } = await runCli(['update', '--check', '--self'], { CAS_TEST_REGISTRY_URL: url });
-    assert.match(stdout, /claude-account-switch/);
-    assert.doesNotMatch(stdout, /@anthropic-ai\/claude-code/);
+  it('reports Claude version status as unchecked and gives official guidance', async () => {
+    requests = [];
+    const result = await runCli(['update', '--claude-code', '--check']);
+    assert.equal(result.code, 2, result.stderr);
+    assert.match(result.stdout, /claude update/);
+    assert.match(result.stdout, /not checked/);
+    assert.deepEqual(requests, []);
   });
-
-  it('filters to claude-code with --claude-code', async () => {
-    const { stdout } = await runCli(['update', '--check', '--claude-code'], { CAS_TEST_REGISTRY_URL: url });
-    assert.match(stdout, /@anthropic-ai\/claude-code/);
-    assert.doesNotMatch(stdout, /^[ \t]*claude-account-switch[ \t]/m);
+  it('exits 0 when the package is current', async () => {
+    latest = '0.0.1';
+    const result = await runCli(['update', '--check']);
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /up to date/);
   });
-});
-
-describe('update --check (no updates)', () => {
-  let server;
-  let url;
-
-  before(async () => {
-    // Returns a very low version so installed is always >= latest → up to date
-    installFakeNativeClaude('1.0.0');
-    ({ server, url } = await startMockRegistry({ self: '0.0.1', claude: '0.0.1' }));
-  });
-
-  after(() => { server.close(); });
-
-  it('exits 0 when everything is up to date', async () => {
-    const { code, stdout } = await runCli(['update', '--check'], { CAS_TEST_REGISTRY_URL: url });
-    assert.equal(code, 0, `expected exit 0, got ${code}`);
-    assert.match(stdout, /up to date/);
+  it('exits 2 for registry failure without changing the installation', async () => {
+    statusCode = 503;
+    const result = await runCli(['update', '--check']);
+    assert.equal(result.code, 2);
+    assert.match(result.stderr, /503/);
+    assert.equal(readFileSync(fakeBin, 'utf8'), 'preserve this executable');
+    assert.equal(existsSync(join(homedir(), '.claude-profiles')), false);
   });
 });

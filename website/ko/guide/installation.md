@@ -1,59 +1,32 @@
 ---
 title: 설치 — claude-account-switch
-description: claude-account-switch 설치 방법. npx로 즉시 사용하거나 npm으로 글로벌 설치할 수 있습니다.
+description: Node.js, Claude Code와 로컬 실행 파일 설치 안내.
 ---
 
 # 설치
 
-## 사전 요구사항
-
-- **Node.js 18+** — [다운로드](https://nodejs.org/)
-- **Claude Code** — `npm i -g @anthropic-ai/claude-code`
-
-## 권장: npx로 사용
-
-설치 없이 바로 실행:
+Node.js 18.19+ (18계열) 또는 20.10+와 npm이 필요합니다. 기존 Claude Code를 다시 설치할 필요는 없습니다. Claude Code가 없다면 [공식 설치 가이드](https://code.claude.com/docs/en/setup)를 사용합니다.
 
 ```bash
-npx claude-account-switch init
+npx claude-account-switch@latest init
 ```
 
-최신 버전을 자동으로 다운로드하고 실행합니다.
+첫 설정은 프로필과 로컬 실행 파일을 `~/.claude-profiles/`에 저장하고 감지한 셸에 연결합니다. npx 캐시를 지워도 계속 사용할 수 있습니다.
 
-## 글로벌 설치
-
-영구적으로 설치하려면:
+## 기존 설치 복구·갱신
 
 ```bash
-npm i -g claude-account-switch
+npx claude-account-switch@latest install-shell
 ```
 
-이후 명령어를 직접 실행:
+새 터미널을 열어 반영합니다. `init` 재실행은 기존 설정을 바꾸지 않습니다. `list`, `use`, 도움말도 셸 설정을 변경하지 않습니다.
+
+글로벌 CLI를 선호하면 `npm install -g claude-account-switch@latest`도 가능합니다. 글로벌 패키지를 갱신한 뒤에는 `claude-account-switch install-shell`로 로컬 실행 파일을 갱신합니다.
+
+## 확인
 
 ```bash
-claude-account-switch init
-claude-account-switch list
-claude-account-switch use work
+npx claude-account-switch@latest list
 ```
 
-## 설치 확인
-
-```bash
-# npx 사용 시
-npx claude-account-switch list
-
-# 글로벌 설치 시
-claude-account-switch list
-```
-
-## 요구사항
-
-| 항목 | 버전 |
-|------|------|
-| Node.js | 18+ |
-| Claude Code | 최신 |
-| 플랫폼 | macOS, Linux, Windows (네이티브 + WSL) |
-
-## Zero Dependencies
-
-외부 의존성 없음 — Node.js 내장 모듈만 사용하여 `npx` 실행 시 즉시 시작됩니다.
+일상적인 `claude`, `cpf`, `claude-pick` 실행에는 Node.js가 계속 필요합니다. [플랫폼별 설정](/ko/guide/setup-macos)을 참고하세요.

@@ -1,99 +1,68 @@
-import { parseArgs } from 'node:util';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { error, color, success } from './lib/ui.mjs';
-import { installAllShells } from './lib/shell.mjs';
+import { error, color } from './lib/ui.mjs';
 
-const PKG_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
-const pkg = JSON.parse(readFileSync(PKG_PATH, 'utf8'));
+const pkg = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8'));
 
 const COMMANDS = {
-  init:            () => import('./commands/init.mjs').then(m => m.init()),
-  add:             (name) => import('./commands/add.mjs').then(m => m.add(name)),
-  remove:          (name) => import('./commands/remove.mjs').then(m => m.remove(name)),
-  list:            () => import('./commands/list.mjs').then(m => m.list()),
-  use:             (name) => import('./commands/use.mjs').then(m => m.use(name)),
+  init: () => import('./commands/init.mjs').then(m => m.init()),
+  add: name => import('./commands/add.mjs').then(m => m.add(name)),
+  remove: name => import('./commands/remove.mjs').then(m => m.remove(name)),
+  list: () => import('./commands/list.mjs').then(m => m.list()),
+  use: name => import('./commands/use.mjs').then(m => m.use(name)),
   'install-shell': () => import('./commands/install-shell.mjs').then(m => m.installShell()),
-  migrate:         (name) => import('./commands/migrate.mjs').then(m => m.migrate(name)),
-  mcp:             (_, args) => import('./commands/mcp/index.mjs').then(m => m.mcp(args)),
-  update:          (_, args) => import('./commands/update.mjs').then(m => m.update(args)),
+  migrate: (name, args) => import('./commands/migrate.mjs').then(m => m.migrate(name, args)),
+  mcp: (_, args) => import('./commands/mcp/index.mjs').then(m => m.mcp(args)),
+  update: (_, args) => import('./commands/update.mjs').then(m => m.update(args)),
+  shell: (_, args) => import('./commands/shell.mjs').then(m => m.shell(args)),
 };
-
-const RAW_ARGV_COMMANDS = new Set(['mcp', 'update']);
 
 function showHelp() {
   console.log(`
-  ${color.bold('claude-account-switch')} — Multi-account manager for Claude Code
+  ${color.bold('claude-account-switch')} — Profile switching for Claude Code
 
-  ${color.bold('Usage:')}
-    claude-account-switch <command> [options]
+  Usage: claude-account-switch <command> [options]
 
-  ${color.bold('Commands:')}
-    init              Interactive setup wizard
-    add <name>        Create a new profile
-    remove <name>     Remove a profile
-    list              List all profiles
-    use <name>        Switch active profile
-    migrate [name]    Migrate existing ~/.claude data into a profile
-    install-shell     Install shell integration
-    mcp [sub]         Manage MCP servers interactively
-    update [opts]     Update Claude Code (and check for self-updates)
+  Commands:
+  init              Set up profiles; show existing setup on repeated runs
+  add <name>        Create a profile
+  remove <name>     Remove a profile after confirmation
+  list              List profiles
+  use <name>        Change the active profile
+  migrate <name>    Import existing settings (--from <path>)
+  install-shell     Install or repair shell integration
+  update [--check]  Update this tool; --check only checks
+  mcp [list]        Show legacy MCP entries and migration guidance
 
-  ${color.bold('Examples:')}
+  Examples:
     npx claude-account-switch init
-    npx claude-account-switch add staging
-    npx claude-account-switch use work
-    npx claude-account-switch migrate work
+    npx claude-account-switch migrate work --from ~/.claude
+    cpf personal
 `);
 }
 
 export async function run(argv) {
-  if (argv.includes('--version') || argv.includes('-v')) {
+  const [command, ...args] = argv;
+  if (!command || ['help', '--help', '-h'].includes(command)) {
+    showHelp();
+    return;
+  }
+  if (['--version', '-v'].includes(command)) {
     console.log(pkg.version);
     return;
   }
-
-  if (argv.length === 0 || argv.includes('--help') || argv.includes('-h')) {
-    showHelp();
-    return;
-  }
-
-  const { positionals } = parseArgs({
-    args: argv,
-    allowPositionals: true,
-    strict: false,
-  });
-
-  const [command, ...args] = positionals;
-
-  if (!command || command === 'help') {
-    showHelp();
-    return;
-  }
-
   const handler = COMMANDS[command];
   if (!handler) {
     error(`Unknown command: ${command}`);
     showHelp();
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
-
-  // Some commands (mcp, update) own their own parseArgs and need raw subargs
-  const rawSubArgs = argv.slice(argv.indexOf(command) + 1);
-
   try {
-    await handler(args[0], RAW_ARGV_COMMANDS.has(command) ? rawSubArgs : args);
+    await handler(args[0], args);
   } catch (err) {
     error(err.message);
-    process.exit(1);
-  }
-
-  // Auto-detect new shells and install integration silently
-  const { newlyInstalled } = installAllShells();
-  if (newlyInstalled.length > 0) {
-    console.log();
-    success(`New shell detected — integration installed (${newlyInstalled.join(', ')})`);
-    success('Open a new terminal to activate');
+    process.exitCode = 1;
   }
 }

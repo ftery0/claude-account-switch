@@ -1,10 +1,6 @@
 import { createInterface } from 'node:readline';
 import { color, hasColor, cursorUp, clearLine, clearDown, sym } from './ui.mjs';
 
-/**
- * Zero-dependency interactive prompts using raw stdin.
- */
-
 function rl() {
   return createInterface({ input: process.stdin, output: process.stdout });
 }
@@ -84,30 +80,30 @@ export async function confirm(message, defaultVal = true) {
   });
 }
 
-export async function select(message, choices) {
+export async function select(message, choices, { output = process.stdout, initial = 0 } = {}) {
   return new Promise((resolve) => {
-    let selected = 0;
+    let selected = Math.max(0, Math.min(initial, choices.length - 1));
     let rendered = false;
 
     const render = () => {
       if (rendered) {
-        process.stdout.write(cursorUp(choices.length));
+        output.write(cursorUp(choices.length));
       }
       choices.forEach((choice, i) => {
         const label = typeof choice === 'string' ? choice : choice.label;
         const prefix = i === selected ? color.cyan(`  ${sym.cursor} `) : '    ';
-        process.stdout.write(`${clearLine}${prefix}${label}\n`);
+        output.write(`${clearLine}${prefix}${label}\n`);
       });
       rendered = true;
     };
 
     if (!process.stdin.isTTY) {
       // Non-interactive: pick first choice without rendering menu
-      resolve(typeof choices[0] === 'string' ? choices[0] : choices[0].value);
+      resolve(typeof choices[selected] === 'string' ? choices[selected] : choices[selected].value);
       return;
     }
 
-    process.stdout.write(`${color.cyan('?')} ${message}\n`);
+    output.write(`${color.cyan('?')} ${message}\n`);
     render();
 
     process.stdin.setRawMode(true);
@@ -128,15 +124,15 @@ export async function select(message, choices) {
         const choice = choices[selected];
         const value = typeof choice === 'string' ? choice : choice.value;
         if (hasColor) {
-          process.stdout.write(`${cursorUp(choices.length + 1)}\r${clearLine}${color.green(sym.check)} ${message} ${color.dim(sym.dots)} ${color.cyan(value)}\n${clearDown}`);
+          output.write(`${cursorUp(choices.length + 1)}\r${clearLine}${color.green(sym.check)} ${message} ${color.dim(sym.dots)} ${color.cyan(value)}\n${clearDown}`);
         }
         resolve(value);
       } else if (key === '\x03') {
         process.stdin.setRawMode(false);
         process.stdin.pause();
         process.stdin.removeListener('data', onData);
-        process.stdout.write('\n');
-        process.exit(0);
+        output.write('\n');
+        resolve(null);
       }
     };
 

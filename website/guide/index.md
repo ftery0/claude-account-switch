@@ -1,96 +1,46 @@
 ---
 title: Quick Start — claude-account-switch
-description: Get started with claude-account-switch in under a minute. Create profiles, migrate existing configs, and switch between Claude Code accounts.
-jsonLd:
-  "@context": "https://schema.org"
-  "@type": "FAQPage"
-  mainEntity:
-    - "@type": "Question"
-      name: "How do I use multiple accounts with Claude Code?"
-      acceptedAnswer:
-        "@type": "Answer"
-        text: "Install claude-account-switch and run 'npx claude-account-switch init'. It manages separate profiles using the CLAUDE_CONFIG_DIR environment variable, each with its own OAuth credentials."
-    - "@type": "Question"
-      name: "Does claude-account-switch require any dependencies?"
-      acceptedAnswer:
-        "@type": "Answer"
-        text: "No. claude-account-switch has zero external dependencies — it uses only Node.js built-in modules for instant npx startup."
-    - "@type": "Question"
-      name: "What platforms does claude-account-switch support?"
-      acceptedAnswer:
-        "@type": "Answer"
-        text: "macOS, Linux, and Windows (native + WSL). It supports zsh, bash, fish, and PowerShell shells."
-    - "@type": "Question"
-      name: "Can I share settings across profiles?"
-      acceptedAnswer:
-        "@type": "Answer"
-        text: "Yes. Shared files like settings.json and custom commands are stored in a _shared directory and symlinked into each profile, so changes apply to all profiles automatically."
+description: Profile setup and safe migration using your existing Claude installation.
+jsonLd: {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Should I run init if Claude is already installed?", "acceptedAnswer": {"@type": "Answer", "text": "Run it for first profile setup. Existing profiles are summarized without changes."}}, {"@type": "Question", "name": "Does it work after the npx cache is deleted?", "acceptedAnswer": {"@type": "Answer", "text": "The installed local runtime remains usable. Node.js and Claude Code are still required."}}, {"@type": "Question", "name": "Does migration copy the login?", "acceptedAnswer": {"@type": "Answer", "text": "File credentials are copied only into the selected profile. macOS Keychain is not copied; Claude checks authentication."}}]}
 ---
 
 # Quick Start
 
-Get up and running with multiple Claude Code accounts in under a minute.
+This tool adds profile selection and configuration import to Claude Code's [separate configuration directories](https://code.claude.com/docs/en/iam#log-in-with-multiple-accounts).
 
-## Why claude-account-switch?
-
-Claude Code doesn't officially support multiple accounts. `claude-account-switch` uses the `CLAUDE_CONFIG_DIR` environment variable to manage separate profiles, each with its own OAuth credentials.
-
-## Setup
+With Node.js 18.19+ (18.x) or 20.10+ and Claude Code available, run:
 
 ```bash
-npx claude-account-switch init
+npx claude-account-switch@latest init
 ```
 
-Here's what the interactive wizard looks like:
-
-```
-  ╭──────────────────────────────────────╮
-  │ Welcome to Claude Switch!            │
-  │ Multi-account manager for Claude Code│
-  ╰──────────────────────────────────────╯
-
-  How many profiles do you want to set up? 2
-
-  Profile 1 name: work
-  Profile 2 name: personal
-
-  Which profile should be active by default?
-  ❯ work
-    personal
-
-  Share settings across profiles? (recommended) Yes
-
-  Existing ~/.claude detected. Migrate to a profile?
-  ❯ Yes, migrate to "work"
-    Yes, migrate to "personal"
-    No, skip
-
-  ✓ Migrated ~/.claude → profile: work
-  ⚠ Original ~/.claude was NOT deleted.
-  ✓ Created profile: work
-  ✓ Created profile: personal
-  ✓ Shared settings linked
-  ✓ Shell integration installed (zsh, bash)
-  ✓ Active profile: work
-
-  Next steps:
-    1. Open a new terminal
-    2. Run claude to authenticate your "work" profile
-    3. Run cpf personal && claude to authenticate "personal"
-```
-
-## After Setup
+1. Choose profile names and the active profile.
+2. Choose whether to share `settings.json` and `commands/`.
+3. Copy one detected existing configuration into one profile, or skip.
+4. Open a new terminal and run `claude`. Claude handles login if needed.
 
 ```bash
-claude           # Launch Claude with the active profile
-cpf work         # Quick switch to "work" profile
-cpf personal     # Quick switch to "personal" profile
-claude-pick      # Interactive profile selector with arrow keys
+cpf personal
+claude
+claude-pick
 ```
 
-## Next Steps
+Already initialized? `init` only shows the current setup. Run `npx claude-account-switch@latest install-shell` to repair or refresh shell integration.
 
-- [Installation](/guide/installation) — all installation methods
-- [Commands](/guide/commands) — full CLI reference
-- [Shell Integration](/guide/shell-integration) — available shell commands
-- Platform guides: [macOS](/guide/setup-macos) · [Linux](/guide/setup-linux) · [Windows](/guide/setup-windows)
+## FAQ
+
+### Should I run init if Claude is already installed?
+
+Run it for first profile setup. Existing profiles are summarized without changes.
+
+
+### Does it work after the npx cache is deleted?
+
+The installed local runtime remains usable. Node.js and Claude Code are still required.
+
+
+### Does migration copy the login?
+
+File credentials are copied only into the selected profile. macOS Keychain is not copied; Claude checks authentication.
+
+[Installation](/guide/installation) · [Commands and migration](/guide/commands) · [Shell integration](/guide/shell-integration)

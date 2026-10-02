@@ -1,3 +1,4 @@
+import './helpers/home.mjs';
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -55,17 +56,17 @@ describe('readMeta', async () => {
     assert.equal(meta.shareSettings, true);
   });
 
-  it('returns defaults when meta.json is corrupt', () => {
-    writeFileSync(META_FILE, 'this is not json {{{');
-    const meta = readMeta();
-    assert.deepEqual(meta.profiles, []);
-    assert.equal(meta.activeProfile, null);
+  it('rejects corrupt metadata without replacing it', () => {
+    const original = 'this is not json {{{';
+    writeFileSync(META_FILE, original);
+    assert.throws(() => readMeta(), /Invalid JSON/);
+    assert.equal(readFileSync(META_FILE, 'utf8'), original);
   });
 
-  it('returns defaults when meta.json is empty', () => {
+  it('rejects empty metadata without replacing it', () => {
     writeFileSync(META_FILE, '');
-    const meta = readMeta();
-    assert.deepEqual(meta.profiles, []);
+    assert.throws(() => readMeta(), /Invalid JSON/);
+    assert.equal(readFileSync(META_FILE, 'utf8'), '');
   });
 
   it('handles BOM-prefixed JSON (PowerShell 5.1 UTF-8)', () => {

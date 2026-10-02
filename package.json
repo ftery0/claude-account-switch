@@ -1,20 +1,20 @@
 {
   "name": "claude-account-switch",
-  "version": "1.2.3",
+  "version": "2.0.0",
   "description": "Multi-account profile manager for Claude Code",
   "type": "module",
   "bin": {
-    "claude-account-switch": "./bin/cli.mjs"
+    "claude-account-switch": "bin/cli.mjs"
   },
   "files": [
     "bin/",
     "src/"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": "^18.19.0 || >=20.10.0"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=1 test/*.test.mjs",
+    "test": "node --test",
     "docs:dev": "vitepress dev website",
     "docs:build": "vitepress build website",
     "docs:preview": "vitepress preview website"
@@ -30,9 +30,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ftery0/claude-account-switch.git"
+    "url": "git+https://github.com/ftery0/claude-account-switch.git"
   },
   "devDependencies": {
     "vitepress": "^1.6.4"
+  },
+  "claudeAccountSwitch": {
+    "runtimeProtocol": 1
   }
 }

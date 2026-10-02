@@ -1,160 +1,60 @@
 ---
-title: CLI Commands — claude-account-switch
-description: Complete reference for all claude-account-switch CLI commands. Init, add, remove, list, use, migrate, install-shell, mcp, and update.
+title: Commands and Migration — claude-account-switch
+description: Profile management, safe import and version 2 compatibility.
 ---
 
-# CLI Commands
+# Commands and Migration
 
-All commands can be run with `npx claude-account-switch <command>` or, if installed globally, `claude-account-switch <command>`.
+Prefix these commands with `npx claude-account-switch@latest`, or use `claude-account-switch` with a global installation.
 
-## `init`
+| Command | Behavior |
+| --- | --- |
+| `init` | First setup wizard; read-only summary if profiles already exist |
+| `add <name>` | Create a profile |
+| `remove <name>` | Delete a profile after confirmation |
+| `list` | Show profiles and active selection |
+| `use <name>` | Change active profile |
+| `migrate [name] --from <path>` | Copy configuration; select a target if omitted |
+| `install-shell` | Install, repair or refresh detected shells and the local runtime |
+| `update [--check]` | Update the local runtime; check without installing with `--check` |
+| `mcp [list]` | Read legacy MCP server names and file paths |
 
-Interactive setup wizard that guides you through the complete setup process.
+Names use lowercase letters, digits and hyphens, up to 30 characters, and start/end with a letter or digit. `_shared` and `default` are reserved.
 
-```bash
-npx claude-account-switch init
-```
+## Import an existing configuration
 
-This will:
-1. Create profiles (defaults to `work` and `personal`, or `main` for single profile)
-2. Migrate existing `~/.claude` config (if present)
-3. Auto-detect and install shell integration for all available shells
-
-## `add <name>`
-
-Create a new profile.
-
-```bash
-npx claude-account-switch add work
-npx claude-account-switch add personal
-```
-
-## `remove <name>`
-
-Remove an existing profile and its data.
+Create the target profile first, then run:
 
 ```bash
-npx claude-account-switch remove old-account
+npx claude-account-switch@latest migrate work --from ~/.claude
 ```
 
-## `list`
+The default source combines `~/.claude` with the separate `~/.claude.json`. A configured `CLAUDE_CONFIG_DIR` is also detected with its own `.claude.json`. Use `--from` for a custom directory.
 
-List all profiles and show which one is active.
+Import preserves settings, commands, projects, plugins, plans, skills, agents, rules, hooks and `CLAUDE.md`. Symlinks retain their original targets. File credentials are copied with restricted permissions into only the chosen profile. macOS Keychain is not migrated; Claude checks authentication. A `.claude.json` file does not establish login status.
+
+The source is retained. Equal or nested source/target paths are rejected. Different existing target or shared data stops import with a conflict path. Invalid JSON is never treated as empty configuration.
+
+## MCP compatibility
+
+Version 2 removes the separate MCP editor. `mcp` and `mcp list` only show legacy server names and file paths, without URLs, tokens or environment values. Former `add/remove/enable/disable` calls fail without modifying files.
+
+Register the servers you need with the official CLI under the selected profile. Old entries are not automatically converted or deleted.
 
 ```bash
-npx claude-account-switch list
+cpf work
+claude mcp add --transport http example --scope user https://example.com/mcp
+claude mcp list
 ```
 
-Output example:
-```
-  Profiles:
+Do not assume legacy `mcpServers` in shared settings applies across accounts. User/local scope uses Claude's user configuration; project scope uses `.mcp.json`. See the [official MCP guide](https://code.claude.com/docs/en/mcp).
 
-      personal  ~/.claude-profiles/personal
-   *  work      ~/.claude-profiles/work
+## Update compatibility
 
-  Active: work
-```
+`update` and `update --self` install a verified compatible version of this tool into a separate local runtime directory. Existing sessions keep their old files. `--yes` is accepted for compatibility. `--check` never installs and exits 0 when current, 1 for a newer version, or 2 if the check fails.
 
-## `use <name>`
+Legacy `--claude-code` prints [official update guidance](https://code.claude.com/docs/en/setup#update-manually). It does not check Claude's version, so `--claude-code --check` exits 2. Update Claude using `claude update` or your installation's package manager.
 
-Switch the active profile.
+Interactive launches automatically check and update this tool once daily in the background. New launches use the verified version; account data, harness hooks and shell profiles remain untouched. Noninteractive launches do not update. Set `CLAUDE_SWITCH_DISABLE_AUTO_UPDATE=1` to disable this. Failed checks retry after an hour; failed downloads retain the installed runtime. Node.js and npm are required, and packages with incompatible runtime protocols or Node requirements are rejected.
 
-```bash
-npx claude-account-switch use personal
-```
-
-## `migrate [name]`
-
-Migrate existing `~/.claude` data into a profile. If no name is given, the wizard will prompt you to select a source directory and target profile.
-
-```bash
-npx claude-account-switch migrate work
-```
-
-The wizard detects common source directories (`~/.claude`, `~/.claude-work`, `~/.claude-personal`) or lets you enter a custom path. After migration:
-
-- `.claude.json`, `settings.local.json` — auth & local settings
-- `plugins/`, `projects/`, `plans/` — profile data
-- `settings.json`, `commands/` — copied to `_shared` and symlinked (if shared settings enabled)
-
-::: warning
-The original source directory is NOT deleted. Remove it manually after verifying everything works.
-:::
-
-## `install-shell`
-
-Manually install shell integration for a specific shell. You will be prompted to choose one shell.
-
-```bash
-npx claude-account-switch install-shell
-```
-
-::: tip
-This is usually not needed — `init` auto-installs for all detected shells. Use `install-shell` only if you need to reinstall for a specific shell.
-:::
-
-## `mcp [subcommand]`
-
-Manage MCP servers per-profile. Running `mcp` with no subcommand launches an interactive TUI.
-
-```bash
-npx claude-account-switch mcp                                          # interactive TUI
-npx claude-account-switch mcp add ctx --shared --command "npx -y ctx7" # add shared stdio MCP
-npx claude-account-switch mcp add figma --shared --type http --url https://mcp.figma.com/mcp
-npx claude-account-switch mcp remove figma --profile work              # remove from one profile
-npx claude-account-switch mcp disable figma --profile work             # hide a shared MCP
-npx claude-account-switch mcp enable figma --profile work              # re-enable
-```
-
-| Subcommand | Description |
-|------------|-------------|
-| `mcp` / `mcp list` | Interactive TUI |
-| `mcp add <name> --shared --type http --url <url>` | Add a shared HTTP MCP |
-| `mcp add <name> --profile <p> --command <cmd>` | Add a stdio MCP to one profile |
-| `mcp remove <name> --shared` | Remove a shared MCP |
-| `mcp remove <name> --profile <p>` | Remove a profile-specific MCP |
-| `mcp disable <name> --profile <p>` | Hide a shared MCP for a profile |
-| `mcp enable <name> --profile <p>` | Re-enable a disabled shared MCP |
-
-::: tip
-HTTP MCPs require OAuth — run `claude` in the target profile after adding, then use `/mcp` to authenticate.
-:::
-
-## `update [options]`
-
-Update Claude Code (and surface self-updates) without breaking the shell integration. The self-update is intentionally print-only — it shows the exact `npm install -g claude-account-switch@latest` command instead of overwriting itself mid-process.
-
-```bash
-npx claude-account-switch update            # check both, install Claude Code after confirm
-npx claude-account-switch update --check    # dry-run; exit 1 if updates are available
-npx claude-account-switch update --self     # show the self-update command only
-npx claude-account-switch update --claude-code --yes  # non-interactive (CI)
-```
-
-| Flag | Behavior |
-|------|----------|
-| (none) | Check both packages, install Claude Code after confirmation |
-| `--check` / `-n` | Dry-run; never installs. Exit `0` if up to date, `1` if updates are available, `2` on registry error |
-| `--self` | Print the self-update command only |
-| `--claude-code` | Update Claude Code only |
-| `--yes` / `-y` | Skip the install confirm (does not bypass dev-symlink / sudo / running-claude blocks) |
-
-Behavior highlights:
-
-- Detects the package manager (`npm` / `yarn` / `pnpm` / `bun`) from the install path
-- Refuses self-update when `claude-account-switch` is a `npm link` symlink (dev install)
-- Pre-flights `sudo` requirements and prints the exact command to re-run
-- Blocks Claude Code install on Windows while `claude.exe` is running (avoids EBUSY)
-- Refreshes shell-integration templates after a successful install — the next terminal picks up the new binary
-- Warns if Claude Code's `bin` entry changes between versions (signals that templates may need attention)
-
-::: tip
-Use `--check` in CI to fail the job when an update is available — exit `1` is intended for this.
-:::
-
-## Profile Name Rules
-
-- Lowercase letters, numbers, and hyphens only
-- Must start and end with a letter or number
-- Maximum 30 characters
-- Reserved names: `_shared`, `default`
+Users of 1.x run `npx claude-account-switch@latest install-shell` once and open a new terminal to enable this runtime. Daily shell usage does not need a global installation. An independently installed global command is not automatically updated.

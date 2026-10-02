@@ -18,10 +18,10 @@ export const SHARED_FILES = ['settings.json'];
 export const SHARED_DIRS = ['commands'];
 
 // Files/dirs that are profile-specific (copied independently)
-export const PROFILE_FILES = ['.claude.json', 'settings.local.json'];
-export const PROFILE_DIRS = ['plugins', 'projects', 'plans'];
+export const PROFILE_FILES = [
+  '.claude.json', '.credentials.json', 'settings.local.json', 'history.jsonl', 'CLAUDE.md',
+  'pre-launch.sh', 'pre-launch.fish', 'pre-launch.ps1',
+];
+export const PROFILE_DIRS = ['plugins', 'projects', 'plans', 'skills', 'agents', 'rules', 'hooks'];
 
-// npm package names used by the `update` command
-export const CLAUDE_CODE_PKG = '@anthropic-ai/claude-code';
 export const SELF_PKG = 'claude-account-switch';
-

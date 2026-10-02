@@ -1,73 +1,52 @@
 ---
 title: How It Works — claude-account-switch
-description: Architecture and design of claude-account-switch. Profile directory structure, shared settings via symlinks, and CLAUDE_CONFIG_DIR.
+description: Shared scope, profile files and authentication responsibilities.
 ---
 
 # How It Works
 
-`claude-account-switch` manages separate Claude Code profiles by leveraging the `CLAUDE_CONFIG_DIR` environment variable.
+Shell commands invoke the local runtime, which passes the selected profile path to Claude as `CLAUDE_CONFIG_DIR`.
 
-## Directory Structure
-
-```
+```text
 ~/.claude-profiles/
-├── meta.json                  ← Profile metadata + active profile
-├── .shell-integration.sh      ← bash/zsh integration script
-├── .shell-integration.fish    ← fish integration script
-├── .shell-integration.ps1     ← PowerShell integration script
-├── .picker.mjs                ← Arrow-key picker script
+├── meta.json                 Active profile and sharing choice
+├── _runtime/                 bin, src, package.json
+├── .shell-integration.sh     Shell connection
 ├── _shared/
-│   ├── settings.json          ← Shared settings (original)
-│   └── commands/               ← Shared custom commands
-├── work/
-│   ├── .claude.json           ← Work account OAuth
-│   ├── settings.local.json    ← Local settings (profile-specific)
-│   ├── settings.json          → ../_shared/settings.json (symlink)
-│   ├── commands/              → ../_shared/commands/ (symlink)
-│   ├── plugins/               ← Installed plugins
-│   ├── projects/              ← Project-specific settings
-│   └── plans/                 ← Saved plans
-└── personal/
-    ├── .claude.json           ← Personal account OAuth
+│   ├── settings.json
+│   └── commands/
+└── work/
+    ├── .claude.json          User configuration and state
+    ├── .credentials.json     Only where file credentials exist
     ├── settings.local.json
-    ├── settings.json          → ../_shared/settings.json
-    ├── commands/              → ../_shared/commands/
+    ├── settings.json         Links to _shared when enabled
+    ├── commands/             Links to _shared when enabled
+    ├── CLAUDE.md
+    ├── skills/
+    ├── agents/
+    ├── rules/
+    ├── hooks/
     ├── plugins/
     ├── projects/
     └── plans/
 ```
 
-## Shared Settings
+## Sharing scope
 
-Shared files (`settings.json`, `commands/`) are stored once in `_shared/` and linked into each profile:
+Only `settings.json` and legacy `commands/` are shared. Skills, agents, rules, hooks and `CLAUDE.md` are imported into the chosen profile, not automatically distributed to other accounts. This tool does not install skills.
 
-- **macOS/Linux**: Symbolic links
-- **Windows**: Symlinks are attempted first. If symlink creation fails (Developer Mode not enabled), files are copied with a one-time notice. Directories always use junctions (no special permissions needed).
+macOS/Linux use symlinks; Windows directories use junctions. If Windows cannot create a file symlink, the file is copied with a notice. Subsequent file changes are not automatically synchronized in that case.
 
-Changes to shared settings automatically apply to all profiles.
+## Authentication
 
-## Profile-Specific Files
+`.claude.json` stores user configuration and state; it is not proof of an OAuth login. macOS Keychain credentials are not moved automatically. Existing file credentials go into only the selected profile. Claude determines login status on launch.
 
-Each profile independently manages:
+The [official authentication guide](https://code.claude.com/docs/en/iam#log-in-with-multiple-accounts) uses separate directories for claude.ai logins and API keys. Keyless Claude Console sign-ins are not separated by configuration directories alone. Inherited authentication environment variables also continue to apply.
 
-- **`.claude.json`** — OAuth credentials
-- **`settings.local.json`** — Local settings
-- **`plugins/`** — Installed plugins
-- **`projects/`** — Project-specific settings
-- **`plans/`** — Saved plans
+## Preservation and runtime
 
-## Temporary Files
+Default import combines `~/.claude` and `~/.claude.json`. Existing symlinks retain their original targets; sources are not edited. Conflicts and invalid JSON stop the operation with a reason.
 
-Files like `cache/`, `sessions/`, `history.jsonl`, `session-env/`, `shell-snapshots/`, `paste-cache/`, `file-history/`, `backups/` are auto-created by Claude Code and not managed by `claude-account-switch`.
+`meta.json` records active selection. Shell installation and refresh happen during explicit first setup, `install-shell` or `shell refresh`. Daily use then needs neither the npx cache nor a global switch command.
 
-## Auto Shell Detection
-
-Every time you run any `claude-account-switch` command, it checks for newly available shells and installs integration automatically. If you install a new shell (e.g. fish), the next CLI run will detect it and set up integration.
-
-## Profile Switching
-
-When you run `cpf <name>` or `claude-pick`, the tool:
-
-1. Updates `meta.json` to record the new active profile
-2. Sets `CLAUDE_CONFIG_DIR` to point to the selected profile directory
-3. Claude Code then reads its config from that directory
+Claude-created caches, sessions and temporary history are not imported wholesale. They remain in the source.

@@ -1,162 +1,105 @@
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { color, box, success, warn } from '../lib/ui.mjs';
 import * as prompt from '../lib/prompt.mjs';
 import { readMeta, writeMeta } from '../lib/config.mjs';
-import { createProfile, validateProfileName, migrateDir } from '../lib/profile.mjs';
-import { PROFILES_DIR, HOME, IS_WINDOWS } from '../lib/constants.mjs';
+import { createProfile, profileExists, validateProfileName, migrateDir, migrationSource } from '../lib/profile.mjs';
+import { HOME, DEFAULT_CLAUDE_DIR, IS_WINDOWS } from '../lib/constants.mjs';
 import { installAllShells } from '../lib/shell.mjs';
 
-// Known existing profile directories to detect for migration
-const homeLabel = IS_WINDOWS ? '%USERPROFILE%' : '~';
-const KNOWN_DIRS = [
-  { path: join(HOME, '.claude'), label: `${homeLabel}/.claude` },
-  { path: join(HOME, '.claude-work'), label: `${homeLabel}/.claude-work` },
-  { path: join(HOME, '.claude-personal'), label: `${homeLabel}/.claude-personal` },
-];
+export function existingClaudeSources() {
+  const candidates = [
+    process.env.CLAUDE_CONFIG_DIR,
+    DEFAULT_CLAUDE_DIR,
+    join(HOME, '.claude-work'),
+    join(HOME, '.claude-personal'),
+  ].filter(Boolean);
+  return [...new Set(candidates.map(path => resolve(path)))].filter(path => {
+    const source = migrationSource(path);
+    return existsSync(source.directory) || existsSync(source.userConfig);
+  });
+}
 
 export async function init() {
+  const current = readMeta();
+  if (current.profiles.length > 0) {
+    warn('claude-account-switch is already initialized.');
+    console.log(`  Profiles: ${current.profiles.join(', ')}`);
+    console.log(`  Active: ${current.activeProfile || 'none'}`);
+    console.log(`  Add an account: ${color.cyan('claude-account-switch add <name>')}`);
+    console.log(`  Repair shell integration: ${color.cyan('claude-account-switch install-shell')}`);
+    return;
+  }
+
   console.log();
   console.log(box([
     `Welcome to ${color.bold('Claude Switch!')}`,
-    `Multi-account manager for Claude Code`,
+    'Multi-account manager for Claude Code',
   ]));
   console.log();
-
-  // Check if already initialized
-  if (existsSync(PROFILES_DIR)) {
-    const meta = readMeta();
-    if (meta.profiles.length > 0) {
-      warn('claude-account-switch is already initialized.');
-      console.log(`  Profiles: ${meta.profiles.join(', ')}`);
-      console.log(`  Active: ${meta.activeProfile}`);
-      console.log();
-      const proceed = await prompt.confirm('Reinitialize? This will not delete existing profiles', false);
-      if (!proceed) return;
-      console.log();
-    }
-  }
-
-  // Step 1: How many profiles?
   const count = await prompt.number('How many profiles do you want to set up?', 2);
   console.log();
-
-  // Step 2: Profile names
   const names = [];
-  if (count === 1) {
-    // Single profile mode — auto-name as the user chooses or use simple name
-    const name = await askProfileName('Profile name:', 'main', names);
-    names.push(name);
-  } else {
-    for (let i = 0; i < count; i++) {
-      const defaultName = i === 0 ? 'work' : i === 1 ? 'personal' : '';
-      const name = await askProfileName(`Profile ${i + 1} name:`, defaultName, names);
-      names.push(name);
+  for (let index = 0; index < count; index++) {
+    const defaultName = count === 1 ? 'main' : index === 0 ? 'work' : index === 1 ? 'personal' : '';
+    const message = count === 1 ? 'Profile name:' : `Profile ${index + 1} name:`;
+    names.push(await askProfileName(message, defaultName, names));
+  }
+  console.log();
+  const activeProfile = names.length === 1
+    ? names[0]
+    : await prompt.select('Which profile should be active by default?', names);
+  if (!activeProfile) return;
+  const shareSettings = await prompt.confirm('Share settings.json and commands across profiles?', true);
+  const sources = existingClaudeSources();
+  let migration;
+  if (sources.length > 0) {
+    const source = await prompt.select('Copy an existing Claude configuration?', [
+      ...sources.map(path => ({ label: path, value: path })),
+      { label: 'Skip', value: '__skip__' },
+    ]);
+    if (!source) return;
+    if (source !== '__skip__') {
+      const target = names.length === 1 ? names[0] : await prompt.select('Copy into which profile?', names);
+      if (!target) return;
+      migration = { source, target };
     }
   }
-  console.log();
-
-  // Step 3: Default active profile
-  let activeProfile;
-  if (names.length === 1) {
-    activeProfile = names[0];
-  } else {
-    activeProfile = await prompt.select(
-      'Which profile should be active by default?',
-      names,
-    );
-    console.log();
-  }
-
-  // Step 4: Share settings?
-  const shareSettings = await prompt.confirm('Share settings across profiles? (recommended)', true);
-  console.log();
-
-  // Step 5: Detect existing directories for migration
-  const existingDirs = KNOWN_DIRS.filter(d => existsSync(d.path) && existsSync(join(d.path, '.claude.json')));
-  const migrations = [];
-
-  if (existingDirs.length > 0) {
-    for (const dir of existingDirs) {
-      const choices = [
-        ...names.map(n => ({ label: `Yes, migrate to "${n}"`, value: n })),
-        { label: 'No, skip', value: 'skip' },
-      ];
-      const target = await prompt.select(
-        `Existing ${dir.label} detected. Migrate to a profile?`,
-        choices,
-      );
-      if (target !== 'skip') {
-        migrations.push({ source: dir.path, target });
-      }
-      console.log();
-    }
-  }
-
-  // Execute
-  console.log();
-
-  // Perform migrations first
-  const migrated = new Set();
-  for (const m of migrations) {
-    migrateDir(m.source, m.target, shareSettings);
-    migrated.add(m.target);
-    success(`Migrated ${m.source} → profile: ${m.target}`);
-    warn(`Original ${m.source} was NOT deleted. Once you verify everything works, you can remove it manually.`);
-  }
-
-  // Create remaining profiles
   for (const name of names) {
-    if (!migrated.has(name)) {
-      createProfile(name, shareSettings);
-    }
-    success(`Created profile: ${name}`);
+    if (profileExists(name)) throw new Error(`Profile directory "${name}" already exists. Choose another name.`);
   }
-
-  // Update meta
-  const meta = readMeta();
-  meta.activeProfile = activeProfile;
-  meta.shareSettings = shareSettings;
-  writeMeta(meta);
-
-  if (shareSettings) {
-    success('Shared settings linked');
+  if (migration) {
+    migrateDir(migration.source, migration.target, shareSettings);
+    success(`Copied ${migration.source} → profile: ${migration.target}`);
   }
-
-  // Shell integration — auto-install for all detected shells
+  for (const name of names) {
+    if (migration?.target !== name) createProfile(name, shareSettings);
+    success(`Profile ready: ${name}`);
+  }
+  writeMeta({ ...readMeta(), activeProfile, shareSettings });
   const { newlyInstalled, alreadyInstalled } = installAllShells();
-  const allShells = [...newlyInstalled, ...alreadyInstalled];
-  if (allShells.length > 0) {
-    success(`Shell integration installed (${allShells.join(', ')})`);
-  }
-
+  const shells = [...newlyInstalled, ...alreadyInstalled];
+  if (shells.length > 0) success(`Shell integration installed (${shells.join(', ')})`);
   success(`Active profile: ${activeProfile}`);
-
-  // Next steps
   console.log();
-  console.log(`  ${color.bold('Next steps:')}`);
-  console.log(`    1. Open a new terminal`);
-  console.log(`    2. Run ${color.cyan('claude')} to authenticate your "${activeProfile}" profile`);
+  console.log(`  Open a new terminal and run ${color.cyan('claude')}. Claude will check authentication.`);
   if (names.length > 1) {
-    const otherProfile = names.find(n => n !== activeProfile);
-    const chainCmd = IS_WINDOWS
-      ? `cpf ${otherProfile}; claude`
-      : `cpf ${otherProfile} && claude`;
-    console.log(`    3. Run ${color.cyan(chainCmd)} to authenticate "${otherProfile}"`);
+    const other = names.find(name => name !== activeProfile);
+    const command = IS_WINDOWS ? `cpf ${other}; claude` : `cpf ${other} && claude`;
+    console.log(`  To use another profile: ${color.cyan(command)}`);
+  }
+  if (migration) {
+    warn('Original configuration was preserved. macOS Keychain credentials are not copied.');
   }
   console.log();
 }
 
-async function askProfileName(message, defaultVal, existingNames = []) {
+async function askProfileName(message, defaultName, names) {
   while (true) {
-    const name = await prompt.text(message, defaultVal);
-    const err = validateProfileName(name);
-    if (err) {
-      console.log(`  ${color.red(err)}`);
-      continue;
-    }
-    if (existingNames.includes(name)) {
-      console.log(`  ${color.red(`"${name}" is already used — choose a different name`)}`);
+    const name = await prompt.text(message, defaultName);
+    const error = validateProfileName(name);
+    if (error || names.includes(name) || profileExists(name)) {
+      console.log(`  ${color.red(error || `"${name}" is already used — choose a different name`)}`);
       continue;
     }
     return name;
